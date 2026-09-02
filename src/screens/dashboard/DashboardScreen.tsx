@@ -1,24 +1,32 @@
 import React, {useState} from 'react';
 
 import {
+  Modal,
   Pressable,
-  SafeAreaView,
-  ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 
+import {
+  SafeAreaView,
+} from 'react-native-safe-area-context';
+
 import {useNavigation} from '@react-navigation/native';
-import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 
-import Svg, {
-  Circle,
-} from 'react-native-svg';
+import type {
+  NativeStackNavigationProp,
+} from '@react-navigation/native-stack';
 
-import {Button, Card} from '../../components';
+import MaterialDesignIcons from
+  '@react-native-vector-icons/material-design-icons';
 
 import {
+  FloatingBottomNav,
+} from '../../components';
+
+import {
+  useAccounts,
   useAuth,
   useDrivers,
   useMaintenance,
@@ -26,47 +34,404 @@ import {
   useVehicles,
 } from '../../store';
 
-import type {RootStackParamList} from '../../navigation/AppNavigator';
+import type {
+  RootStackParamList,
+} from '../../navigation/AppNavigator';
+
+/*
+ * ─────────────────────────────────────
+ * NAVIGATION
+ * ─────────────────────────────────────
+ */
 
 type DashboardNavigationProp =
-  NativeStackNavigationProp<RootStackParamList>;
+  NativeStackNavigationProp<
+    RootStackParamList
+  >;
 
-type FleetSummaryItem = {
+/*
+ * ─────────────────────────────────────
+ * ICON TYPE
+ * ─────────────────────────────────────
+ */
+
+type DashboardIconName =
+  React.ComponentProps<
+    typeof MaterialDesignIcons
+  >['name'];
+
+/*
+ * ─────────────────────────────────────
+ * FLEET CATEGORY COLORS
+ * ─────────────────────────────────────
+ */
+
+const FLEET_COLORS = {
+  vehicles: '#1688FF',
+  drivers: '#00D6C9',
+  trips: '#9B5CFF',
+  maintenance: '#FF9F1C',
+} as const;
+
+/*
+ * ─────────────────────────────────────
+ * STATUS COLORS
+ * ─────────────────────────────────────
+ *
+ * Blue  = informational
+ * Amber = warning
+ * Red   = urgent
+ */
+
+const STATUS_COLORS = {
+  info: '#60A5FA',
+  warning: '#FBBF24',
+  urgent: '#FF5A70',
+} as const;
+
+/*
+ * ─────────────────────────────────────
+ * FINANCIAL COLORS
+ * ─────────────────────────────────────
+ */
+
+const FINANCIAL_COLORS = {
+  profit: '#00D6A3',
+  loss: '#FF4D6D',
+} as const;
+
+/*
+ * ─────────────────────────────────────
+ * FLEET STAT CARD
+ * ─────────────────────────────────────
+ */
+
+const StatCard = ({
+  icon,
+  color,
+  title,
+  value,
+  subtitle,
+  subtitleColor,
+}: {
+  icon: DashboardIconName;
+  color: string;
+  title: string;
   value: number;
-  label: string;
-  lowColor: string;
-  highColor: string;
+  subtitle: string;
+  subtitleColor: string;
+}) => {
+  return (
+    <View style={styles.statCard}>
+
+      <View style={styles.statCardInner}>
+
+        {/* ICON */}
+
+        <View
+          style={[
+            styles.statIcon,
+            {
+              backgroundColor:
+                `${color}18`,
+              borderColor:
+                `${color}28`,
+            },
+          ]}>
+
+          <MaterialDesignIcons
+            name={icon}
+            size={21}
+            color={color}
+          />
+
+        </View>
+
+        {/* TITLE */}
+
+        <Text
+          style={styles.statTitle}
+          numberOfLines={1}>
+          {title}
+        </Text>
+
+        {/* VALUE + STATUS */}
+
+        <View
+          style={styles.statBottomRow}>
+
+          <Text
+            style={styles.statValue}>
+            {value}
+          </Text>
+
+          <View
+            style={styles.statStatusRow}>
+
+            <View
+              style={[
+                styles.statusDot,
+                {
+                  backgroundColor:
+                    subtitleColor,
+                },
+              ]}
+            />
+
+            <Text
+              style={[
+                styles.statSubtitle,
+                {
+                  color:
+                    subtitleColor,
+                },
+              ]}>
+              {subtitle}
+            </Text>
+
+          </View>
+
+        </View>
+
+      </View>
+
+    </View>
+  );
 };
 
 /*
- * Smaller circular graphs
+ * ─────────────────────────────────────
+ * OPERATIONAL ACTIVITY ROW
+ * ─────────────────────────────────────
  */
-const RING_SIZE = 68;
-const RING_STROKE_WIDTH = 6;
 
-const RING_RADIUS =
-  (RING_SIZE - RING_STROKE_WIDTH) / 2;
+const ActivityRow = ({
+  icon,
+  color,
+  title,
+  subtitle,
+  value,
+  valueColor,
+}: {
+  icon: DashboardIconName;
+  color: string;
+  title: string;
+  subtitle: string;
+  value: number;
+  valueColor: string;
+}) => {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      style={({pressed}) => [
+        styles.activityRow,
+        pressed &&
+          styles.activityPressed,
+      ]}>
 
-const RING_CIRCUMFERENCE =
-  2 * Math.PI * RING_RADIUS;
+      <View
+        style={[
+          styles.activityIcon,
+          {
+            backgroundColor:
+              `${color}20`,
+          },
+        ]}>
+
+        <MaterialDesignIcons
+          name={icon}
+          size={20}
+          color={color}
+        />
+
+      </View>
+
+      <View
+        style={styles.activityText}>
+
+        <Text
+          style={styles.activityTitle}>
+          {title}
+        </Text>
+
+        <Text
+          style={styles.activitySubtitle}>
+          {subtitle}
+        </Text>
+
+      </View>
+
+      <Text
+        style={[
+          styles.activityValue,
+          {
+            color:
+              valueColor,
+          },
+        ]}>
+        {value}
+      </Text>
+
+      <MaterialDesignIcons
+        name="chevron-right"
+        size={22}
+        color="#94A3B8"
+      />
+
+    </Pressable>
+  );
+};
+
+/*
+ * ─────────────────────────────────────
+ * DASHBOARD
+ * ─────────────────────────────────────
+ */
 
 const DashboardScreen = () => {
+
+  /*
+   * ALL HOOKS AT THE TOP
+   */
+
   const navigation =
     useNavigation<DashboardNavigationProp>();
 
-  const {user, logout} = useAuth();
+  const {
+    user,
+    logout,
+  } = useAuth();
 
-  const {vehicles} = useVehicles();
-  const {drivers} = useDrivers();
-  const {trips} = useTrips();
-  const {maintenanceRecords} =
-    useMaintenance();
+  const {
+    vehicles,
+  } = useVehicles();
+
+  const {
+    drivers,
+  } = useDrivers();
+
+  const {
+    trips,
+  } = useTrips();
+
+  const {
+    maintenanceRecords,
+  } = useMaintenance();
+
+  const {
+    totalIncome,
+    totalExpenses,
+    netProfitLoss,
+  } = useAccounts();
+
+  const [
+    profileMenuVisible,
+    setProfileMenuVisible,
+  ] = useState(false);
 
   /*
-   * Profile menu state
+   * ─────────────────────────────────────
+   * TIME OF DAY
+   * ─────────────────────────────────────
    */
-  const [profileMenuVisible, setProfileMenuVisible] =
-    useState(false);
+
+  const currentHour =
+    new Date().getHours();
+
+  const greeting =
+    currentHour < 12
+      ? 'Good morning'
+      : currentHour < 17
+      ? 'Good afternoon'
+      : 'Good evening';
+
+  /*
+   * ─────────────────────────────────────
+   * FLEET DATA
+   * ─────────────────────────────────────
+   */
+
+  const totalVehicles =
+    vehicles.length;
+
+  const activeVehicles =
+    vehicles.filter(
+      vehicle =>
+        vehicle.status === 'Active',
+    ).length;
+
+  const totalDrivers =
+    drivers.length;
+
+  const activeDrivers =
+    drivers.filter(
+      driver =>
+        driver.status === 'Active',
+    ).length;
+
+  const totalTrips =
+    trips.length;
+
+  const inProgressTrips =
+    trips.filter(
+      trip =>
+        trip.status === 'In Progress',
+    ).length;
+
+  const completedTrips =
+    trips.filter(
+      trip =>
+        trip.status === 'Completed',
+    ).length;
+
+  const maintenanceVehicles =
+    vehicles.filter(
+      vehicle =>
+        vehicle.status === 'Maintenance',
+    ).length;
+
+  const upcomingMaintenance =
+    maintenanceRecords.filter(
+      record =>
+        record.status === 'Scheduled' ||
+        record.status === 'In Progress',
+    ).length;
+
+  const highPriorityAlerts =
+    maintenanceRecords.filter(
+      record =>
+        record.priority === 'High',
+    ).length;
+
+  /*
+   * ─────────────────────────────────────
+   * FINANCIAL DATA
+   * ─────────────────────────────────────
+   */
+
+  const isProfit =
+    netProfitLoss >= 0;
+
+  const financialColor =
+    isProfit
+      ? FINANCIAL_COLORS.profit
+      : FINANCIAL_COLORS.loss;
+
+  const formatCurrency = (
+    amount: number,
+  ) => {
+    return `₹${Math.abs(
+      amount,
+    ).toLocaleString(
+      'en-IN',
+    )}`;
+  };
+
+  /*
+   * ─────────────────────────────────────
+   * LOGOUT
+   * ─────────────────────────────────────
+   */
 
   const handleLogout = async () => {
     setProfileMenuVisible(false);
@@ -82,348 +447,78 @@ const DashboardScreen = () => {
   };
 
   /*
-   * VEHICLE SUMMARY
+   * ─────────────────────────────────────
+   * RENDER
+   * ─────────────────────────────────────
    */
-  const totalVehicles = vehicles.length;
-
-  const activeVehicles = vehicles.filter(
-    vehicle => vehicle.status === 'Active',
-  ).length;
-
-  const maintenanceVehicles =
-    vehicles.filter(
-      vehicle =>
-        vehicle.status === 'Maintenance',
-    ).length;
-
-  /*
-   * DRIVER SUMMARY
-   */
-  const totalDrivers = drivers.length;
-
-  const activeDrivers = drivers.filter(
-    driver => driver.status === 'Active',
-  ).length;
-
-  const inactiveDrivers = drivers.filter(
-    driver => driver.status === 'Inactive',
-  ).length;
-
-  const driversOnLeave = drivers.filter(
-    driver => driver.status === 'On Leave',
-  ).length;
-
-  /*
-   * TRIP SUMMARY
-   */
-  const totalTrips = trips.length;
-
-  const scheduledTrips = trips.filter(
-    trip => trip.status === 'Scheduled',
-  ).length;
-
-  const inProgressTrips = trips.filter(
-    trip => trip.status === 'In Progress',
-  ).length;
-
-  const completedTrips = trips.filter(
-    trip => trip.status === 'Completed',
-  ).length;
-
-  /*
-   * MAINTENANCE SUMMARY
-   */
-  const totalMaintenance =
-    maintenanceRecords.length;
-
-  const scheduledMaintenance =
-    maintenanceRecords.filter(
-      record => record.status === 'Scheduled',
-    ).length;
-
-  const inProgressMaintenance =
-    maintenanceRecords.filter(
-      record =>
-        record.status === 'In Progress',
-    ).length;
-
-  const completedMaintenance =
-    maintenanceRecords.filter(
-      record =>
-        record.status === 'Completed',
-    ).length;
-
-  /*
-   * ALERT COUNT
-   */
-  const alerts = maintenanceRecords.filter(
-    record => record.priority === 'High',
-  ).length;
-
-  /*
-   * FLEET OVERVIEW
-   */
-  const fleetSummary: FleetSummaryItem[] = [
-    {
-      value: totalVehicles,
-      label: 'Vehicles',
-      lowColor: '#93C5FD',
-      highColor: '#2563EB',
-    },
-    {
-      value: activeVehicles,
-      label: 'Active Vehicles',
-      lowColor: '#86EFAC',
-      highColor: '#16A34A',
-    },
-    {
-      value: maintenanceVehicles,
-      label: 'In Maintenance',
-      lowColor: '#FDE68A',
-      highColor: '#D97706',
-    },
-    {
-      value: alerts,
-      label: 'Alerts',
-      lowColor: '#FCA5A5',
-      highColor: '#DC2626',
-    },
-    {
-      value: totalDrivers,
-      label: 'Drivers',
-      lowColor: '#C4B5FD',
-      highColor: '#7C3AED',
-    },
-    {
-      value: activeDrivers,
-      label: 'Active Drivers',
-      lowColor: '#67E8F9',
-      highColor: '#0891B2',
-    },
-    {
-      value: totalTrips,
-      label: 'Trips',
-      lowColor: '#A5B4FC',
-      highColor: '#4F46E5',
-    },
-    {
-      value: totalMaintenance,
-      label: 'Maintenance',
-      lowColor: '#D8B4FE',
-      highColor: '#9333EA',
-    },
-  ];
-
-  /*
-   * Largest current value is the reference
-   * for all Fleet Overview rings.
-   */
-  const fleetMaxValue = Math.max(
-    ...fleetSummary.map(item => item.value),
-    1,
-  );
-
-  /*
-   * Convert value to circular progress.
-   */
-  const getProgress = (value: number) => {
-    if (value <= 0) {
-      return 0;
-    }
-
-    return Math.min(
-      value / fleetMaxValue,
-      1,
-    );
-  };
-
-  /*
-   * HEX → RGB
-   */
-  const hexToRgb = (hex: string) => {
-    const cleanHex = hex.replace('#', '');
-
-    return {
-      r: parseInt(
-        cleanHex.substring(0, 2),
-        16,
-      ),
-      g: parseInt(
-        cleanHex.substring(2, 4),
-        16,
-      ),
-      b: parseInt(
-        cleanHex.substring(4, 6),
-        16,
-      ),
-    };
-  };
-
-  /*
-   * RGB → HEX
-   */
-  const rgbToHex = (
-    r: number,
-    g: number,
-    b: number,
-  ) => {
-    const toHex = (value: number) =>
-      Math.round(value)
-        .toString(16)
-        .padStart(2, '0');
-
-    return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
-  };
-
-  /*
-   * Dynamic color based on progress.
-   */
-  const getProgressColor = (
-    progress: number,
-    lowColor: string,
-    highColor: string,
-  ) => {
-    const start = hexToRgb(lowColor);
-    const end = hexToRgb(highColor);
-
-    const r =
-      start.r +
-      (end.r - start.r) * progress;
-
-    const g =
-      start.g +
-      (end.g - start.g) * progress;
-
-    const b =
-      start.b +
-      (end.b - start.b) * progress;
-
-    return rgbToHex(r, g, b);
-  };
-
-  /*
-   * Fleet Circular Graph
-   */
-  const FleetRing = ({
-    value,
-    lowColor,
-    highColor,
-  }: {
-    value: number;
-    lowColor: string;
-    highColor: string;
-  }) => {
-    const progress = getProgress(value);
-
-    const strokeColor =
-      progress === 0
-        ? '#CBD5E1'
-        : getProgressColor(
-            progress,
-            lowColor,
-            highColor,
-          );
-
-    const strokeDashoffset =
-      RING_CIRCUMFERENCE *
-      (1 - progress);
-
-    return (
-      <View style={styles.ringContainer}>
-        <Svg
-          width={RING_SIZE}
-          height={RING_SIZE}
-          viewBox={`0 0 ${RING_SIZE} ${RING_SIZE}`}>
-
-          {/* Background Ring */}
-          <Circle
-            cx={RING_SIZE / 2}
-            cy={RING_SIZE / 2}
-            r={RING_RADIUS}
-            stroke="#E2E8F0"
-            strokeWidth={
-              RING_STROKE_WIDTH
-            }
-            fill="none"
-          />
-
-          {/* Progress Ring */}
-          {progress > 0 && (
-            <Circle
-              cx={RING_SIZE / 2}
-              cy={RING_SIZE / 2}
-              r={RING_RADIUS}
-              stroke={strokeColor}
-              strokeWidth={
-                RING_STROKE_WIDTH
-              }
-              strokeLinecap="round"
-              strokeDasharray={`${RING_CIRCUMFERENCE} ${RING_CIRCUMFERENCE}`}
-              strokeDashoffset={
-                strokeDashoffset
-              }
-              fill="none"
-              rotation="-90"
-              origin={`${RING_SIZE / 2}, ${
-                RING_SIZE / 2
-              }`}
-            />
-          )}
-        </Svg>
-
-        {/* Number in Center */}
-        <View
-          style={styles.ringCenter}>
-          <Text
-            style={[
-              styles.statValue,
-              {
-                color:
-                  progress === 0
-                    ? '#94A3B8'
-                    : strokeColor,
-              },
-            ]}>
-            {value}
-          </Text>
-        </View>
-      </View>
-    );
-  };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View pointerEvents="none" style={styles.auroraLayer}>
-        <View style={styles.auroraBlue} />
-        <View style={styles.auroraViolet} />
-        <View style={styles.auroraCyan} />
+    <SafeAreaView
+      style={styles.safeArea}
+      edges={['top', 'bottom']}>
+
+      {/* BACKGROUND */}
+
+      <View
+        pointerEvents="none"
+        style={styles.background}>
+
+        <View
+          style={styles.blueGlow}
+        />
+
+        <View
+          style={styles.violetGlow}
+        />
+
+        <View
+          style={styles.cyanGlow}
+        />
+
       </View>
 
-      <ScrollView
-        contentContainerStyle={
-          styles.scrollContent
-        }
-        showsVerticalScrollIndicator={false}>
+      {/* DASHBOARD */}
+
+      <View style={styles.screen}>
 
         {/* HEADER */}
-        <View style={styles.header}>
-          <View style={styles.headerText}>
-            <Text style={styles.brand}>
-                Fleet<Text style={styles.flowTitle}>Flow</Text>
+
+        <View
+          style={styles.header}>
+
+          <View
+            style={styles.brandBlock}>
+
+            <Text
+              style={styles.brand}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.8}>
+
+              Fleet
+              <Text
+                style={
+                  styles.brandAccent
+                }>
+                Flow
+              </Text>
+
             </Text>
 
-            <Text style={styles.welcome}>
-              Welcome back
-              {user?.email
-                ? `, ${user.email}`
-                : ''}
+            <Text
+              style={styles.brandCaption}>
+              — FLEET OPERATIONS —
             </Text>
+
           </View>
 
-          {/* PROFILE AREA */}
-          <View style={styles.profileContainer}>
+          {/* PROFILE */}
 
-            {/* PROFILE BUTTON */}
+          <View
+            style={
+              styles.profileContainer
+            }>
+
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Open profile menu"
@@ -431,843 +526,1489 @@ const DashboardScreen = () => {
                 expanded:
                   profileMenuVisible,
               }}
+              hitSlop={8}
               onPress={() =>
-                setProfileMenuVisible(
-                  current => !current,
-                )
+                setProfileMenuVisible(true)
               }
               style={({pressed}) => [
-                styles.profileBadge,
+                styles.profileButton,
                 pressed &&
-                  styles.profileBadgePressed,
+                  styles.profilePressed,
               ]}>
+
               <Text
                 style={
                   styles.profileInitial
                 }>
                 {user?.email
                   ?.charAt(0)
-                  .toUpperCase() || 'U'}
+                  .toUpperCase() ||
+                  'P'}
               </Text>
+
+              <View
+                style={styles.onlineDot}
+              />
+
             </Pressable>
 
-            {/* PROFILE MENU */}
-            {profileMenuVisible && (
+          </View>
+
+        </View>
+
+        {/* GREETING */}
+
+        <View
+          style={styles.greetingBlock}>
+
+          <Text
+            style={styles.greeting}>
+            {greeting} 👋
+          </Text>
+
+          <Text
+            style={
+              styles.greetingSubtitle
+            }>
+            Here's what's happening
+            with your fleet today.
+          </Text>
+
+        </View>
+
+        {/* FLEET OVERVIEW */}
+
+        <View
+          style={
+            styles.sectionHeadingBlock
+          }>
+
+          <Text
+            style={styles.sectionTitle}>
+            FLEET OVERVIEW
+          </Text>
+
+          <Text
+            style={
+              styles.sectionSubtitle
+            }>
+            Monitor your fleet's
+            current operational status
+          </Text>
+
+        </View>
+
+        {/* 2 × 2 CARD GRID */}
+
+        <View
+          style={styles.statsGrid}>
+
+          <StatCard
+            icon="truck-outline"
+            color={
+              FLEET_COLORS.vehicles
+            }
+            title="Total Vehicles"
+            value={totalVehicles}
+            subtitle={`${activeVehicles} Active`}
+            subtitleColor={
+              STATUS_COLORS.info
+            }
+          />
+
+          <StatCard
+            icon="account-group-outline"
+            color={
+              FLEET_COLORS.drivers
+            }
+            title="Total Drivers"
+            value={totalDrivers}
+            subtitle={`${activeDrivers} Active`}
+            subtitleColor={
+              STATUS_COLORS.info
+            }
+          />
+
+          <StatCard
+            icon="source-branch"
+            color={
+              FLEET_COLORS.trips
+            }
+            title="Total Trips"
+            value={totalTrips}
+            subtitle={`${inProgressTrips} In Progress`}
+            subtitleColor={
+              STATUS_COLORS.info
+            }
+          />
+
+          <StatCard
+            icon="wrench-outline"
+            color={
+              FLEET_COLORS.maintenance
+            }
+            title="Maintenance"
+            value={
+              maintenanceVehicles
+            }
+            subtitle={`${upcomingMaintenance} Upcoming`}
+            subtitleColor={
+              STATUS_COLORS.warning
+            }
+          />
+
+        </View>
+
+        {/* FINANCIAL PERFORMANCE */}
+
+        <View
+          style={
+            styles.sectionHeadingRow
+          }>
+
+          <View
+            style={
+              styles.sectionHeadingBlock
+            }>
+
+            <Text
+              style={
+                styles.sectionTitle
+              }>
+              FINANCIAL PERFORMANCE
+            </Text>
+
+          </View>
+
+          <MaterialDesignIcons
+            name="information-outline"
+            size={17}
+            color="#94A3B8"
+            style={
+              styles.infoIcon
+            }
+          />
+
+        </View>
+
+        <View
+          style={styles.financeCard}>
+
+          {/* PROFIT / LOSS GRAPHIC */}
+
+          <View
+            style={
+              styles.financeCircleArea
+            }>
+
+            <View
+              style={[
+                styles.financeCircleOuter,
+                {
+                  borderColor:
+                    `${financialColor}35`,
+                },
+              ]}>
+
               <View
-                style={
-                  styles.profileMenu
-                }>
+                style={[
+                  styles.financeCircleInner,
+                  {
+                    borderColor:
+                      financialColor,
+                  },
+                ]}>
 
-                <View
-                  style={
-                    styles.profileMenuHeader
-                  }>
-                  <View
-                    style={
-                      styles.profileMenuAvatar
-                    }>
-                    <Text
-                      style={
-                        styles.profileMenuInitial
-                      }>
-                      {user?.email
-                        ?.charAt(0)
-                        .toUpperCase() ||
-                        'U'}
-                    </Text>
-                  </View>
-
-                  <View
-                    style={
-                      styles.profileMenuInfo
-                    }>
-                    <Text
-                      style={
-                        styles.profileMenuTitle
-                      }>
-                      FleetFlow User
-                    </Text>
-
-                    <Text
-                      numberOfLines={1}
-                      style={
-                        styles.profileMenuEmail
-                      }>
-                      {user?.email ||
-                        'FleetFlow User'}
-                    </Text>
-                  </View>
-                </View>
-
-                <View
-                  style={
-                    styles.profileMenuDivider
+                <MaterialDesignIcons
+                  name={
+                    isProfit
+                      ? 'trending-up'
+                      : 'trending-down'
+                  }
+                  size={23}
+                  color={
+                    financialColor
                   }
                 />
 
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Logout"
-                  onPress={handleLogout}
-                  style={({pressed}) => [
-                    styles.logoutButton,
-                    pressed &&
-                      styles.logoutButtonPressed,
+                <Text
+                  style={[
+                    styles.financeAmount,
+                    {
+                      color:
+                        financialColor,
+                    },
                   ]}>
 
-                  <View
-                    style={
-                      styles.logoutIcon
-                    }>
-                    <Text
-                      style={
-                        styles.logoutIconText
-                      }>
-                      ↪
-                    </Text>
-                  </View>
+                  {isProfit
+                    ? '+'
+                    : '-'}
+                  {formatCurrency(
+                    netProfitLoss,
+                  )}
 
-                  <Text
-                    style={
-                      styles.logoutText
-                    }>
-                    Logout
-                  </Text>
-                </Pressable>
-              </View>
-            )}
-          </View>
-        </View>
+                </Text>
 
-        {/* USER INFORMATION */}
-        <Card>
-          <Text style={styles.cardLabel}>
-            Signed in as
-          </Text>
-
-          <Text style={styles.email}>
-            {user?.email ||
-              'FleetFlow User'}
-          </Text>
-        </Card>
-
-        {/* FLEET OVERVIEW */}
-        <Text style={styles.sectionTitle}>
-          Fleet Overview
-        </Text>
-
-        <View style={styles.statsGrid}>
-          {fleetSummary.map(item => (
-            <View
-              key={item.label}
-              style={styles.statWrapper}>
-              <Card>
-                <View
+                <Text
                   style={
-                    styles.statCardContent
+                    styles.financeProfitLabel
                   }>
+                  {isProfit
+                    ? 'PROFIT'
+                    : 'LOSS'}
+                </Text>
 
-                  <FleetRing
-                    value={item.value}
-                    lowColor={
-                      item.lowColor
-                    }
-                    highColor={
-                      item.highColor
+              </View>
+
+            </View>
+
+          </View>
+
+          {/* FINANCIAL DETAILS */}
+
+          <View
+            style={
+              styles.financeDetails
+            }>
+
+            <View
+              style={styles.financeRow}>
+
+              <View
+                style={
+                  styles.financeRowLeft
+                }>
+
+                <View
+                  style={[
+                    styles.financeIcon,
+                    {
+                      backgroundColor:
+                        `${FINANCIAL_COLORS.profit}18`,
+                    },
+                  ]}>
+
+                  <MaterialDesignIcons
+                    name="trending-up"
+                    size={17}
+                    color={
+                      FINANCIAL_COLORS.profit
                     }
                   />
 
-                  <Text
-                    style={
-                      styles.statLabel
-                    }>
-                    {item.label}
-                  </Text>
                 </View>
-              </Card>
+
+                <Text
+                  style={
+                    styles.financeLabel
+                  }>
+                  Total Revenue
+                </Text>
+
+              </View>
+
+              <Text
+                style={
+                  styles.financeValue
+                }>
+                {formatCurrency(
+                  totalIncome,
+                )}
+              </Text>
+
             </View>
-          ))}
+
+            <View
+              style={
+                styles.financeDivider
+              }
+            />
+
+            <View
+              style={
+                styles.financeRow
+              }>
+
+              <View
+                style={
+                  styles.financeRowLeft
+                }>
+
+                <View
+                  style={[
+                    styles.financeIcon,
+                    {
+                      backgroundColor:
+                        `${FINANCIAL_COLORS.loss}18`,
+                    },
+                  ]}>
+
+                  <MaterialDesignIcons
+                    name="trending-down"
+                    size={17}
+                    color={
+                      FINANCIAL_COLORS.loss
+                    }
+                  />
+
+                </View>
+
+                <Text
+                  style={
+                    styles.financeLabel
+                  }>
+                  Total Expenses
+                </Text>
+
+              </View>
+
+              <Text
+                style={
+                  styles.financeValue
+                }>
+                {formatCurrency(
+                  totalExpenses,
+                )}
+              </Text>
+
+            </View>
+
+            <View
+              style={
+                styles.financeDivider
+              }
+            />
+
+            <View
+              style={
+                styles.financeRow
+              }>
+
+              <View
+                style={
+                  styles.financeRowLeft
+                }>
+
+                <View
+                  style={[
+                    styles.financeIcon,
+                    {
+                      backgroundColor:
+                        `${financialColor}18`,
+                    },
+                  ]}>
+
+                  <MaterialDesignIcons
+                    name="wallet-outline"
+                    size={17}
+                    color={
+                      financialColor
+                    }
+                  />
+
+                </View>
+
+                <Text
+                  style={
+                    styles.financeLabel
+                  }>
+                  Net {isProfit
+                    ? 'Profit'
+                    : 'Loss'}
+                </Text>
+
+              </View>
+
+              <Text
+                style={[
+                  styles.financeValue,
+                  {
+                    color:
+                      financialColor,
+                  },
+                ]}>
+
+                {isProfit
+                  ? '+'
+                  : '-'}
+                {formatCurrency(
+                  netProfitLoss,
+                )}
+
+              </Text>
+
+            </View>
+
+          </View>
+
         </View>
 
-        {/* TRIP OVERVIEW */}
-        <Text style={styles.sectionTitle}>
-          Trip Overview
-        </Text>
+        {/* OPERATIONAL ACTIVITY */}
 
-        <Card>
-          <View style={styles.overviewRow}>
-            <View
-              style={styles.overviewItem}>
-              <Text
-                style={
-                  styles.overviewValue
-                }>
-                {scheduledTrips}
-              </Text>
+        <View
+          style={
+            styles.sectionHeadingBlock
+          }>
 
-              <Text
-                style={
-                  styles.overviewLabel
-                }>
-                Scheduled
-              </Text>
-            </View>
-
-            <View
-              style={styles.overviewItem}>
-              <Text
-                style={
-                  styles.overviewValue
-                }>
-                {inProgressTrips}
-              </Text>
-
-              <Text
-                style={
-                  styles.overviewLabel
-                }>
-                In Progress
-              </Text>
-            </View>
-
-            <View
-              style={styles.overviewItem}>
-              <Text
-                style={
-                  styles.overviewValue
-                }>
-                {completedTrips}
-              </Text>
-
-              <Text
-                style={
-                  styles.overviewLabel
-                }>
-                Completed
-              </Text>
-            </View>
-          </View>
-        </Card>
-
-        {/* DRIVER OVERVIEW */}
-        <Text style={styles.sectionTitle}>
-          Driver Overview
-        </Text>
-
-        <Card>
-          <View style={styles.overviewRow}>
-            <View
-              style={styles.overviewItem}>
-              <Text
-                style={
-                  styles.overviewValue
-                }>
-                {activeDrivers}
-              </Text>
-
-              <Text
-                style={
-                  styles.overviewLabel
-                }>
-                Active
-              </Text>
-            </View>
-
-            <View
-              style={styles.overviewItem}>
-              <Text
-                style={
-                  styles.overviewValue
-                }>
-                {inactiveDrivers}
-              </Text>
-
-              <Text
-                style={
-                  styles.overviewLabel
-                }>
-                Inactive
-              </Text>
-            </View>
-
-            <View
-              style={styles.overviewItem}>
-              <Text
-                style={
-                  styles.overviewValue
-                }>
-                {driversOnLeave}
-              </Text>
-
-              <Text
-                style={
-                  styles.overviewLabel
-                }>
-                On Leave
-              </Text>
-            </View>
-          </View>
-        </Card>
-
-        {/* MAINTENANCE OVERVIEW */}
-        <Text style={styles.sectionTitle}>
-          Maintenance Overview
-        </Text>
-
-        <Card>
-          <View style={styles.overviewRow}>
-            <View
-              style={styles.overviewItem}>
-              <Text
-                style={
-                  styles.overviewValue
-                }>
-                {scheduledMaintenance}
-              </Text>
-
-              <Text
-                style={
-                  styles.overviewLabel
-                }>
-                Scheduled
-              </Text>
-            </View>
-
-            <View
-              style={styles.overviewItem}>
-              <Text
-                style={
-                  styles.overviewValue
-                }>
-                {inProgressMaintenance}
-              </Text>
-
-              <Text
-                style={
-                  styles.overviewLabel
-                }>
-                In Progress
-              </Text>
-            </View>
-
-            <View
-              style={styles.overviewItem}>
-              <Text
-                style={
-                  styles.overviewValue
-                }>
-                {completedMaintenance}
-              </Text>
-
-              <Text
-                style={
-                  styles.overviewLabel
-                }>
-                Completed
-              </Text>
-            </View>
-          </View>
-        </Card>
-
-        {/* QUICK ACTIONS */}
-        <Text style={styles.sectionTitle}>
-          Quick Actions
-        </Text>
-
-        {/* VEHICLES */}
-        <Card>
-          <Text style={styles.actionTitle}>
-            Vehicles
+          <Text
+            style={styles.sectionTitle}>
+            OPERATIONAL ACTIVITY
           </Text>
 
           <Text
             style={
-              styles.actionDescription
+              styles.sectionSubtitle
             }>
-            View and manage your fleet
-            vehicles.
+            Recent activity and items
+            requiring attention
           </Text>
+
+        </View>
+
+        <View
+          style={styles.activityCard}>
+
+          <ActivityRow
+            icon="truck-check-outline"
+            color={
+              FLEET_COLORS.vehicles
+            }
+            title="Recent Trips"
+            subtitle={`${completedTrips} trips completed`}
+            value={completedTrips}
+            valueColor={
+              STATUS_COLORS.info
+            }
+          />
 
           <View
-            style={styles.actionButton}>
-            <Button
-              title="Open Vehicles"
-              onPress={() =>
-                navigation.navigate(
-                  'Vehicles',
-                )
-              }
-            />
-          </View>
-        </Card>
-
-        {/* DRIVERS */}
-        <Card>
-          <Text style={styles.actionTitle}>
-            Drivers
-          </Text>
-
-          <Text
             style={
-              styles.actionDescription
-            }>
-            View and manage your fleet
-            drivers.
-          </Text>
+              styles.activityDivider
+            }
+          />
+
+          <ActivityRow
+            icon="wrench-outline"
+            color={
+              FLEET_COLORS.maintenance
+            }
+            title="Upcoming Maintenance"
+            subtitle={`${upcomingMaintenance} vehicles require attention`}
+            value={
+              upcomingMaintenance
+            }
+            valueColor={
+              STATUS_COLORS.warning
+            }
+          />
 
           <View
-            style={styles.actionButton}>
-            <Button
-              title="Open Drivers"
-              onPress={() =>
-                navigation.navigate(
-                  'Drivers',
-                )
-              }
-            />
-          </View>
-        </Card>
-
-        {/* TRIPS */}
-        <Card>
-          <Text style={styles.actionTitle}>
-            Trips
-          </Text>
-
-          <Text
             style={
-              styles.actionDescription
-            }>
-            View and manage fleet trips
-            and assignments.
-          </Text>
+              styles.activityDivider
+            }
+          />
 
-          <View
-            style={styles.actionButton}>
-            <Button
-              title="Open Trips"
-              onPress={() =>
-                navigation.navigate(
-                  'Trips',
-                )
-              }
-            />
-          </View>
-        </Card>
+          <ActivityRow
+            icon="bell-outline"
+            color={
+              STATUS_COLORS.urgent
+            }
+            title="Alerts"
+            subtitle="High-priority maintenance"
+            value={
+              highPriorityAlerts
+            }
+            valueColor={
+              STATUS_COLORS.urgent
+            }
+          />
 
-        {/* MAINTENANCE */}
-        <Card>
-          <Text style={styles.actionTitle}>
-            Maintenance
-          </Text>
+        </View>
 
-          <Text
+      </View>
+
+      {/* PROFILE MODAL */}
+
+      <Modal
+        visible={profileMenuVisible}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() =>
+          setProfileMenuVisible(false)
+        }>
+
+        <View
+          style={
+            styles.profileModalContainer
+          }>
+
+          <Pressable
             style={
-              styles.actionDescription
-            }>
-            Track vehicle maintenance
-            and service activity.
-          </Text>
+              styles.profileModalBackdrop
+            }
+            onPress={() =>
+              setProfileMenuVisible(false)
+            }
+          />
 
           <View
-            style={styles.actionButton}>
-            <Button
-              title="Open Maintenance"
-              onPress={() =>
-                navigation.navigate(
-                  'Maintenance',
-                )
+            style={
+              styles.profileModalMenu
+            }>
+
+            <View
+              style={
+                styles.profileMenuHeader
+              }>
+
+              <View
+                style={
+                  styles.profileMenuAvatar
+                }>
+
+                <Text
+                  style={
+                    styles.profileMenuInitial
+                  }>
+                  {user?.email
+                    ?.charAt(0)
+                    .toUpperCase() ||
+                    'P'}
+                </Text>
+
+              </View>
+
+              <View
+                style={
+                  styles.profileMenuInfo
+                }>
+
+                <Text
+                  style={
+                    styles.profileMenuTitle
+                  }>
+                  FleetFlow User
+                </Text>
+
+                <Text
+                  numberOfLines={1}
+                  style={
+                    styles.profileMenuEmail
+                  }>
+                  {user?.email ||
+                    'FleetFlow User'}
+                </Text>
+
+              </View>
+
+            </View>
+
+            <View
+              style={
+                styles.profileDivider
               }
             />
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Logout"
+              hitSlop={6}
+              onPress={
+                handleLogout
+              }
+              style={({pressed}) => [
+                styles.logoutButton,
+                pressed &&
+                  styles.logoutPressed,
+              ]}>
+
+              <View
+                style={
+                  styles.logoutIcon
+                }>
+
+                <MaterialDesignIcons
+                  name="logout"
+                  size={18}
+                  color={
+                    FINANCIAL_COLORS.loss
+                  }
+                />
+
+              </View>
+
+              <Text
+                style={
+                  styles.logoutText
+                }>
+                Logout
+              </Text>
+
+            </Pressable>
+
           </View>
-        </Card>
-      </ScrollView>
+
+        </View>
+
+      </Modal>
+
+     
+
     </SafeAreaView>
   );
 };
 
+/*
+ * ─────────────────────────────────────
+ * STYLES
+ * ─────────────────────────────────────
+ */
+
 const styles = StyleSheet.create({
-  container: {
+
+  /*
+   * ROOT
+   */
+
+  safeArea: {
     flex: 1,
-    backgroundColor: '#F7F9FC',
+
+    backgroundColor:
+      '#020817',
   },
 
-  auroraLayer: {
-  position: 'absolute',
-  top: 0,
-  right: 0,
-  bottom: 0,
-  left: 0,
-  overflow: 'hidden',
-  backgroundColor: '#F7F9FC',
+  screen: {
+    flex: 1,
+
+    paddingHorizontal: 22,
+
+    paddingTop: 8,
+
+    paddingBottom: 100,
   },
 
-  auroraBlue: {
+  /*
+   * BACKGROUND
+   */
+
+  background: {
     position: 'absolute',
-    width: 280,
-    height: 280,
-    borderRadius: 140,
-    top: -110,
-    right: -95,
-    backgroundColor: 'rgba(96, 165, 250, 0.16)',
-    transform: [
-      {scaleX: 1.25},
-      {scaleY: 0.82},
-    ],
+
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+
+    overflow: 'hidden',
+
+    backgroundColor:
+      '#020817',
   },
 
-  auroraViolet: {
+  blueGlow: {
     position: 'absolute',
+
     width: 300,
     height: 300,
+
     borderRadius: 150,
-    top: 260,
-    left: -170,
-    backgroundColor: 'rgba(167, 139, 250, 0.12)',
-    transform: [
-      {scaleX: 1.15},
-      {scaleY: 0.85},
-    ],
-  },
 
-  auroraCyan: {
-    position: 'absolute',
-    width: 250,
-    height: 250,
-    borderRadius: 125,
-    bottom: -80,
+    top: -170,
     right: -130,
-    backgroundColor: 'rgba(34, 211, 238, 0.10)',
-    transform: [
-      {scaleX: 1.2},
-      {scaleY: 0.8},
-    ],
+
+    backgroundColor:
+      'rgba(37, 99, 235, 0.13)',
   },
 
-  scrollContent: {
-    paddingHorizontal: 20,
-    paddingVertical: 24,
-    position: 'relative',
-    zIndex: 1,
+  violetGlow: {
+    position: 'absolute',
+
+    width: 270,
+    height: 270,
+
+    borderRadius: 135,
+
+    top: 250,
+    left: -180,
+
+    backgroundColor:
+      'rgba(124, 58, 237, 0.08)',
   },
+
+  cyanGlow: {
+    position: 'absolute',
+
+    width: 280,
+    height: 280,
+
+    borderRadius: 140,
+
+    bottom: -180,
+    right: -150,
+
+    backgroundColor:
+      'rgba(8, 145, 178, 0.08)',
+  },
+
+  /*
+   * HEADER
+   */
 
   header: {
     flexDirection: 'row',
+
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 24,
+
+    justifyContent:
+      'space-between',
+
+    minHeight: 47,
   },
 
-  headerText: {
+  brandBlock: {
     flex: 1,
+
+    paddingRight: 12,
   },
 
   brand: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: '#2563EB',
+    fontSize: 25,
+
+    lineHeight: 28,
+
+    fontWeight: '900',
+
+    letterSpacing: -1,
+
+    color:
+      '#F8FAFC',
+
+    includeFontPadding: false,
   },
 
-  flowTitle: {
-  fontFamily: 'BerkshireSwash-Regular',
-  fontSize: 28,
-  fontWeight: '400',
-   },
+  brandAccent: {
+    color:
+      '#1688FF',
+  },
 
-  welcome: {
-    marginTop: 4,
-    fontSize: 15,
-    color: '#64748B',
+  brandCaption: {
+    marginTop: 2,
+
+    fontSize: 7,
+
+    lineHeight: 9,
+
+    fontWeight: '700',
+
+    letterSpacing: 1.9,
+
+    color:
+      '#94A3B8',
   },
 
   /*
-   * Profile Container
+   * PROFILE
    */
+
   profileContainer: {
     position: 'relative',
-    zIndex: 100,
+
+    zIndex: 10,
   },
 
-  /*
-   * Profile Button
-   */
-  profileBadge: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
+  profileButton: {
+    width: 42,
+    height: 42,
+
+    borderRadius: 21,
+
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#E0E7FF',
-    borderWidth: 1,
-    borderColor: '#C7D2FE',
 
-    shadowColor: '#4F46E5',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.14,
-    shadowRadius: 8,
-    elevation: 3,
+    justifyContent: 'center',
+
+    backgroundColor:
+      'rgba(30, 41, 59, 0.90)',
+
+    borderWidth: 1,
+
+    borderColor:
+      'rgba(148, 163, 184, 0.30)',
   },
 
-  profileBadgePressed: {
-    backgroundColor: '#C7D2FE',
-
+  profilePressed: {
     transform: [
       {
-        scale: 0.96,
+        scale: 0.95,
       },
     ],
   },
 
   profileInitial: {
-    fontSize: 18,
+    fontSize: 17,
+
     fontWeight: '800',
-    color: '#4F46E5',
+
+    color:
+      '#F8FAFC',
+  },
+
+  onlineDot: {
+    position: 'absolute',
+
+    width: 7,
+    height: 7,
+
+    borderRadius: 4,
+
+    right: 1,
+    bottom: 2,
+
+    backgroundColor:
+      '#00D6A3',
+
+    borderWidth: 1,
+
+    borderColor:
+      '#020817',
   },
 
   /*
-   * Profile Menu
+   * PROFILE MODAL
    */
-  profileMenu: {
-    position: 'absolute',
 
-    top: 54,
-    right: 0,
+  profileModalContainer: {
+    flex: 1,
 
-    width: 270,
+    position: 'relative',
+  },
+
+  profileModalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
 
     backgroundColor:
-      'rgba(255, 255, 255, 0.97)',
+      'rgba(0, 0, 0, 0.18)',
+  },
 
-    borderRadius: 18,
+  profileModalMenu: {
+    position: 'absolute',
+
+    top: 58,
+
+    right: 22,
+
+    width: 215,
+
+    padding: 10,
+
+    borderRadius: 16,
+
+    backgroundColor:
+      '#0B1324',
 
     borderWidth: 1,
+
     borderColor:
-      'rgba(148, 163, 184, 0.24)',
+      'rgba(148, 163, 184, 0.22)',
 
-    padding: 12,
+    elevation: 24,
 
-    shadowColor: '#334155',
+    shadowColor:
+      '#000000',
+
     shadowOffset: {
       width: 0,
       height: 10,
     },
-    shadowOpacity: 0.16,
-    shadowRadius: 24,
 
-    elevation: 8,
+    shadowOpacity: 0.40,
 
-    zIndex: 200,
+    shadowRadius: 20,
   },
 
   profileMenuHeader: {
     flexDirection: 'row',
+
     alignItems: 'center',
-    padding: 6,
+
+    paddingHorizontal: 4,
+
+    paddingVertical: 4,
   },
 
   profileMenuAvatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 36,
+    height: 36,
+
+    borderRadius: 18,
+
     alignItems: 'center',
+
     justifyContent: 'center',
-    backgroundColor: '#E0E7FF',
+
+    backgroundColor:
+      'rgba(22, 136, 255, 0.15)',
+
+    borderWidth: 1,
+
+    borderColor:
+      'rgba(22, 136, 255, 0.20)',
   },
 
   profileMenuInitial: {
-    fontSize: 17,
+    fontSize: 15,
+
     fontWeight: '800',
-    color: '#4F46E5',
+
+    color:
+      '#60A5FA',
   },
 
   profileMenuInfo: {
     flex: 1,
-    marginLeft: 11,
+
+    marginLeft: 9,
   },
 
   profileMenuTitle: {
-    fontSize: 14,
+    fontSize: 12,
+
     fontWeight: '800',
-    color: '#172033',
+
+    color:
+      '#F8FAFC',
   },
 
   profileMenuEmail: {
-    marginTop: 3,
-    fontSize: 12,
-    color: '#64748B',
+    marginTop: 2,
+
+    fontSize: 9,
+
+    color:
+      '#A8B6C8',
   },
 
-  profileMenuDivider: {
+  profileDivider: {
     height: 1,
+
     marginVertical: 9,
-    backgroundColor: '#E2E8F0',
+
+    backgroundColor:
+      'rgba(148, 163, 184, 0.12)',
   },
 
-  /*
-   * Logout
-   */
   logoutButton: {
+    minHeight: 44,
+
     flexDirection: 'row',
+
     alignItems: 'center',
-    minHeight: 46,
-    paddingHorizontal: 8,
-    borderRadius: 12,
+
+    paddingHorizontal: 5,
+
+    borderRadius: 10,
   },
 
-  logoutButtonPressed: {
-    backgroundColor: '#FEF2F2',
+  logoutPressed: {
+    backgroundColor:
+      'rgba(255, 77, 109, 0.10)',
   },
 
   logoutIcon: {
     width: 32,
     height: 32,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FEE2E2',
-  },
 
-  logoutIconText: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#DC2626',
+    borderRadius: 10,
+
+    alignItems: 'center',
+
+    justifyContent: 'center',
+
+    backgroundColor:
+      'rgba(255, 77, 109, 0.10)',
   },
 
   logoutText: {
-    marginLeft: 11,
-    fontSize: 14,
+    marginLeft: 9,
+
+    fontSize: 12,
+
     fontWeight: '700',
-    color: '#DC2626',
+
+    color:
+      '#FF6B7F',
   },
 
   /*
-   * User Information
+   * GREETING
    */
-  cardLabel: {
-    marginBottom: 6,
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#64748B',
+
+  greetingBlock: {
+    marginTop: 15,
   },
 
-  email: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: '#0F172A',
+  greeting: {
+    fontSize: 21,
+
+    lineHeight: 26,
+
+    fontWeight: '800',
+
+    color:
+      '#F8FAFC',
+
+    includeFontPadding: false,
+  },
+
+  greetingSubtitle: {
+    marginTop: 4,
+
+    fontSize: 12,
+
+    lineHeight: 17,
+
+    color:
+      '#B6C2D1',
+
+    fontWeight: '500',
   },
 
   /*
-   * Sections
+   * SECTION HEADINGS
    */
+
+  sectionHeadingBlock: {
+    marginTop: 11,
+  },
+
+  sectionHeadingRow: {
+    flexDirection: 'row',
+
+    alignItems: 'center',
+
+    marginTop: 1,
+  },
+
   sectionTitle: {
-    marginTop: 20,
-    marginBottom: 12,
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#0F172A',
+    marginBottom: 2,
+
+    fontSize: 11,
+
+    lineHeight: 15,
+
+    fontWeight: '800',
+
+    letterSpacing: 0.8,
+
+    color:
+      '#A8B6C8',
+  },
+
+  sectionSubtitle: {
+    fontSize: 9,
+
+    lineHeight: 12,
+
+    fontWeight: '500',
+
+    color:
+      '#94A3B8',
+  },
+
+  infoIcon: {
+    marginTop: 8,
+
+    marginLeft: 5,
   },
 
   /*
-   * Fleet Overview
+   * FLEET OVERVIEW
+   * ─────────────────────────────────
+   * 2 × 2 CARD GRID
    */
+
   statsGrid: {
     flexDirection: 'row',
+
     flexWrap: 'wrap',
-    marginHorizontal: -6,
+
+    marginTop: 5,
+
+    marginHorizontal: -4,
   },
 
-  statWrapper: {
+  statCard: {
     width: '50%',
-    paddingHorizontal: 6,
-    marginBottom: 2,
-  },
 
-  statCardContent: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 120,
+    paddingHorizontal: 4,
+
     paddingVertical: 4,
   },
 
-  ringContainer: {
-    width: RING_SIZE,
-    height: RING_SIZE,
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
+  statCardInner: {
+    minHeight: 104,
+
+    paddingHorizontal: 12,
+
+    paddingVertical: 11,
+
+    borderRadius: 16,
+
+    backgroundColor:
+      'rgba(7, 25, 45, 0.96)',
+
+    borderWidth: 1,
+
+    borderColor:
+      'rgba(148, 163, 184, 0.14)',
+
+    justifyContent:
+      'space-between',
+
+    elevation: 3,
+
+    shadowColor:
+      '#000000',
+
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+
+    shadowOpacity: 0.16,
+
+    shadowRadius: 8,
   },
 
-  ringCenter: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
+  statIcon: {
+    width: 36,
+
+    height: 36,
+
+    borderRadius: 11,
+
     alignItems: 'center',
+
     justifyContent: 'center',
+
+    borderWidth: 1,
+  },
+
+  statTitle: {
+    marginTop: 7,
+
+    fontSize: 9,
+
+    lineHeight: 12,
+
+    fontWeight: '700',
+
+    letterSpacing: 0.2,
+
+    color:
+      '#B6C2D1',
+  },
+
+  statBottomRow: {
+    flexDirection: 'row',
+
+    alignItems: 'flex-end',
+
+    justifyContent:
+      'space-between',
+
+    marginTop: 2,
   },
 
   statValue: {
-    fontSize: 21,
-    fontWeight: '800',
+    fontSize: 23,
+
+    lineHeight: 26,
+
+    fontWeight: '900',
+
+    color:
+      '#F8FAFC',
   },
 
-  statLabel: {
-    marginTop: 6,
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#64748B',
-    textAlign: 'center',
+  statStatusRow: {
+    flexDirection: 'row',
+
+    alignItems: 'center',
+
+    marginBottom: 3,
+
+    marginLeft: 4,
+
+    flexShrink: 1,
+  },
+
+  statusDot: {
+    width: 5,
+
+    height: 5,
+
+    borderRadius: 3,
+
+    marginRight: 4,
+  },
+
+  statSubtitle: {
+    fontSize: 8,
+
+    lineHeight: 11,
+
+    fontWeight: '700',
+
+    flexShrink: 1,
   },
 
   /*
-   * Overview
+   * FINANCIAL PERFORMANCE
    */
-  overviewRow: {
+
+  financeCard: {
+    minHeight: 137,
+
     flexDirection: 'row',
-    justifyContent: 'space-between',
+
+    marginTop: 2,
+
+    paddingHorizontal: 11,
+
+    paddingVertical: 9,
+
+    borderRadius: 17,
+
+    backgroundColor:
+      'rgba(5, 24, 43, 0.96)',
+
+    borderWidth: 1,
+
+    borderColor:
+      'rgba(59, 130, 246, 0.22)',
+
+    elevation: 4,
   },
 
-  overviewItem: {
+  financeCircleArea: {
+    width: '41%',
+
+    alignItems: 'center',
+
+    justifyContent: 'center',
+  },
+
+  financeCircleOuter: {
+    width: 91,
+
+    height: 91,
+
+    borderRadius: 46,
+
+    alignItems: 'center',
+
+    justifyContent: 'center',
+
+    borderWidth: 5,
+  },
+
+  financeCircleInner: {
+    width: 77,
+
+    height: 77,
+
+    borderRadius: 39,
+
+    alignItems: 'center',
+
+    justifyContent: 'center',
+
+    borderWidth: 2,
+  },
+
+  financeAmount: {
+    marginTop: 2,
+
+    fontSize: 13,
+
+    lineHeight: 17,
+
+    fontWeight: '900',
+  },
+
+  financeProfitLabel: {
+    marginTop: 1,
+
+    fontSize: 8,
+
+    fontWeight: '800',
+
+    letterSpacing: 0.7,
+
+    color:
+      '#CBD5E1',
+  },
+
+  financeDetails: {
     flex: 1,
+
+    justifyContent: 'center',
+
+    paddingLeft: 5,
+  },
+
+  financeRow: {
+    minHeight: 32,
+
+    flexDirection: 'row',
+
+    alignItems: 'center',
+
+    justifyContent:
+      'space-between',
+  },
+
+  financeRowLeft: {
+    flex: 1,
+
+    flexDirection: 'row',
+
     alignItems: 'center',
   },
 
-  overviewValue: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#2563EB',
+  financeIcon: {
+    width: 28,
+
+    height: 28,
+
+    borderRadius: 9,
+
+    alignItems: 'center',
+
+    justifyContent: 'center',
   },
 
-  overviewLabel: {
-    marginTop: 5,
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#64748B',
-    textAlign: 'center',
+  financeLabel: {
+    marginLeft: 7,
+
+    fontSize: 10,
+
+    fontWeight: '500',
+
+    color:
+      '#CBD5E1',
+  },
+
+  financeValue: {
+    fontSize: 10,
+
+    fontWeight: '800',
+
+    color:
+      '#F8FAFC',
+  },
+
+  financeDivider: {
+    height: 1,
+
+    backgroundColor:
+      'rgba(148, 163, 184, 0.12)',
   },
 
   /*
-   * Quick Actions
+   * OPERATIONAL ACTIVITY
    */
-  actionTitle: {
-    marginBottom: 8,
+
+  activityCard: {
+    marginTop: 2,
+
+    paddingHorizontal: 11,
+
+    paddingVertical: 3,
+
+    borderRadius: 17,
+
+    backgroundColor:
+      'rgba(5, 24, 43, 0.96)',
+
+    borderWidth: 1,
+
+    borderColor:
+      'rgba(148, 163, 184, 0.15)',
+  },
+
+  activityRow: {
+    minHeight: 46,
+
+    flexDirection: 'row',
+
+    alignItems: 'center',
+  },
+
+  activityPressed: {
+    opacity: 0.68,
+  },
+
+  activityIcon: {
+    width: 33,
+
+    height: 33,
+
+    borderRadius: 11,
+
+    alignItems: 'center',
+
+    justifyContent: 'center',
+  },
+
+  activityText: {
+    flex: 1,
+
+    marginLeft: 9,
+  },
+
+  activityTitle: {
+    fontSize: 11,
+
+    lineHeight: 14,
+
+    fontWeight: '800',
+
+    color:
+      '#F8FAFC',
+  },
+
+  activitySubtitle: {
+    marginTop: 1,
+
+    fontSize: 9,
+
+    lineHeight: 12,
+
+    fontWeight: '500',
+
+    color:
+      '#A8B6C8',
+  },
+
+  activityValue: {
+    marginRight: 3,
+
     fontSize: 17,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
 
-  actionDescription: {
-    fontSize: 14,
     lineHeight: 21,
-    color: '#64748B',
+
+    fontWeight: '900',
   },
 
-  actionButton: {
-    marginTop: 16,
+  activityDivider: {
+    height: 1,
+
+    marginLeft: 42,
+
+    backgroundColor:
+      'rgba(148, 163, 184, 0.12)',
   },
 });
 

@@ -51,6 +51,26 @@ const colors = {
 
   /*
    * ─────────────────────────────
+   * CATEGORY COLORS
+   * ─────────────────────────────
+   */
+
+  categories: {
+    dashboard: '#3B82F6',
+
+    vehicles: '#1688FF',
+
+    drivers: '#00D6C9',
+
+    trips: '#9B5CFF',
+
+    maintenance: '#FF9F1C',
+
+    accounts: '#00D6A3',
+  },
+
+  /*
+   * ─────────────────────────────
    * TEXT
    * ─────────────────────────────
    */

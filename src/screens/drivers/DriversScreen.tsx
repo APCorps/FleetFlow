@@ -1,6 +1,8 @@
 import React from 'react';
+
 import {useNavigation} from '@react-navigation/native';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
+
 import {
   Alert,
   SafeAreaView,
@@ -15,19 +17,55 @@ import {
   MaterialDesignIcons,
 } from '@react-native-vector-icons/material-design-icons/static';
 
-import type {RootStackParamList} from '../../navigation/AppNavigator';
+import type {
+  RootStackParamList,
+} from '../../navigation/AppNavigator';
 
-import {Button, Card} from '../../components';
 import {useDrivers} from '../../store';
 
 type DriversScreenNavigationProp =
-  NativeStackNavigationProp<RootStackParamList>;
+  NativeStackNavigationProp<
+    RootStackParamList
+  >;
 
 const DriversScreen = () => {
   const navigation =
     useNavigation<DriversScreenNavigationProp>();
 
-  const {drivers, deleteDriver} = useDrivers();
+  const {
+    drivers,
+    deleteDriver,
+  } = useDrivers();
+
+  /*
+   * ─────────────────────────────────────
+   * STATUS COLOR
+   * ─────────────────────────────────────
+   */
+
+  const getStatusColor = (
+    status: string,
+  ) => {
+    switch (status) {
+      case 'Active':
+        return '#00D6C9';
+
+      case 'On Leave':
+        return '#EF4444';
+
+      case 'Inactive':
+        return '#F59E0B';
+
+      default:
+        return '#94A3B8';
+    }
+  };
+
+  /*
+   * ─────────────────────────────────────
+   * DELETE DRIVER
+   * ─────────────────────────────────────
+   */
 
   const handleDeleteDriver = (
     driverId: string,
@@ -41,9 +79,11 @@ const DriversScreen = () => {
           text: 'Cancel',
           style: 'cancel',
         },
+
         {
           text: 'Delete',
           style: 'destructive',
+
           onPress: () => {
             deleteDriver(driverId);
           },
@@ -52,93 +92,367 @@ const DriversScreen = () => {
     );
   };
 
+  /*
+   * ─────────────────────────────────────
+   * RENDER
+   * ─────────────────────────────────────
+   */
+
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView
+      style={styles.container}>
+
       <ScrollView
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}>
+        contentContainerStyle={
+          styles.content
+        }
+        showsVerticalScrollIndicator={
+          false
+        }>
 
-        {/* Header */}
+        {/* HEADER */}
+
         <View style={styles.header}>
-          <Text style={styles.title}>
-            Drivers
-          </Text>
 
-          <Text style={styles.subtitle}>
-            Manage your fleet drivers
-          </Text>
+          <View
+            style={
+              styles.headerIcon
+            }>
+            <MaterialDesignIcons
+              name="account-hard-hat-outline"
+              size={24}
+              color="#00D6C9"
+            />
+          </View>
+
+          <View
+            style={
+              styles.headerText
+            }>
+            <Text
+              style={
+                styles.title
+              }>
+              Drivers
+            </Text>
+
+            <Text
+              style={
+                styles.subtitle
+              }>
+              Manage your fleet drivers
+            </Text>
+          </View>
+
         </View>
 
-        {/* Summary */}
-        <View style={styles.summary}>
-          <Text style={styles.summaryText}>
-            {drivers.length} drivers
-          </Text>
+        {/* SUMMARY + ADD DRIVER */}
+
+        <View
+          style={
+            styles.summaryActionsRow
+          }>
+
+          {/* TOTAL DRIVERS */}
+
+          <View
+            style={
+              styles.summaryRow
+            }>
+
+            <View>
+              <Text
+                style={
+                  styles.summaryValue
+                }>
+                {drivers.length}
+              </Text>
+
+              <Text
+                style={
+                  styles.summaryLabel
+                }>
+                Total Drivers
+              </Text>
+            </View>
+
+            <View
+              style={
+                styles.summaryAccent
+              }>
+              <MaterialDesignIcons
+                name="account-group-outline"
+                size={21}
+                color="#00D6C9"
+              />
+            </View>
+
+          </View>
+
+          {/* ADD DRIVER */}
+
+          <TouchableOpacity
+            style={
+              styles.addDriverButton
+            }
+            activeOpacity={
+              0.8
+            }
+            accessibilityRole="button"
+            accessibilityLabel="Add Driver"
+            onPress={() =>
+              navigation.navigate(
+                'AddDriver',
+              )
+            }>
+
+            <MaterialDesignIcons
+              name="plus"
+              size={19}
+              color="#FFFFFF"
+            />
+
+            <Text
+              style={
+                styles.addDriverText
+              }>
+              Add Driver
+            </Text>
+
+          </TouchableOpacity>
+
         </View>
 
-        {/* Drivers */}
-        {drivers.map(driver => (
-          <Card key={driver.id}>
-            <View style={styles.driverHeader}>
-              <View style={styles.driverIdentity}>
-                <Text style={styles.driverName}>
-                  {driver.name}
-                </Text>
+        {/* DRIVERS */}
 
-                <Text style={styles.employeeId}>
-                  {driver.employeeId}
-                </Text>
-              </View>
+        {drivers.map(driver => {
+          const statusColor =
+            getStatusColor(
+              driver.status,
+            );
+
+          return (
+            <View
+              key={driver.id}
+              style={
+                styles.driverCard
+              }>
+
+              {/* DRIVER HEADER */}
 
               <View
-                style={[
-                  styles.statusBadge,
-                  driver.status === 'Active'
-                    ? styles.activeBadge
-                    : driver.status ===
-                      'On Leave'
-                    ? styles.leaveBadge
-                    : styles.inactiveBadge,
-                ]}>
-                <Text
+                style={
+                  styles.driverHeader
+                }>
+
+                <View
+                  style={
+                    styles.driverIdentity
+                  }>
+
+                  <View
+                    style={
+                      styles.identityRow
+                    }>
+
+                    <View
+                      style={[
+                        styles.driverIconChip,
+                        {
+                          backgroundColor:
+                            `${statusColor}14`,
+                          borderColor:
+                            `${statusColor}30`,
+                        },
+                      ]}>
+
+                      <MaterialDesignIcons
+                        name="account-outline"
+                        size={18}
+                        color={
+                          statusColor
+                        }
+                      />
+
+                    </View>
+
+                    <View
+                      style={
+                        styles.identityText
+                      }>
+
+                      <Text
+                        style={
+                          styles.driverName
+                        }>
+                        {
+                          driver.name
+                        }
+                      </Text>
+
+                      <Text
+                        style={
+                          styles.employeeId
+                        }>
+                        {
+                          driver.employeeId
+                        }
+                      </Text>
+
+                    </View>
+
+                  </View>
+
+                </View>
+
+                {/* STATUS */}
+
+                <View
                   style={[
-                    styles.statusText,
-                    driver.status === 'Active'
-                      ? styles.activeText
-                      : driver.status ===
-                        'On Leave'
-                      ? styles.leaveText
-                      : styles.inactiveText,
+                    styles.statusBadge,
+                    {
+                      backgroundColor:
+                        `${statusColor}14`,
+                      borderColor:
+                        `${statusColor}28`,
+                    },
                   ]}>
-                  {driver.status}
-                </Text>
+
+                  <View
+                    style={[
+                      styles.statusDot,
+                      {
+                        backgroundColor:
+                          statusColor,
+                      },
+                    ]}
+                  />
+
+                  <Text
+                    style={[
+                      styles.statusText,
+                      {
+                        color:
+                          statusColor,
+                      },
+                    ]}>
+                    {
+                      driver.status
+                    }
+                  </Text>
+
+                </View>
+
               </View>
-            </View>
 
-            {/* Driver Details */}
-            <View style={styles.details}>
-              <Text style={styles.detailText}>
-                Phone: {driver.phone}
-              </Text>
+              {/* DRIVER DETAILS */}
 
-              <Text style={styles.detailText}>
-                License: {driver.licenseNumber}
-              </Text>
+              <View
+                style={
+                  styles.details
+                }>
 
-              <Text style={styles.detailText}>
-                License Expiry:{' '}
-                {new Date(
-                  driver.licenseExpiry,
-                ).toLocaleDateString()}
-              </Text>
-            </View>
+                <View
+                  style={
+                    styles.detailRow
+                  }>
 
-            {/* Actions */}
-            <View style={styles.actionButtons}>
-              {/* View Details */}
-              <View style={styles.actionButton}>
-                <Button
-                  title="View Details"
+                  <MaterialDesignIcons
+                    name="phone-outline"
+                    size={16}
+                    color="#64748B"
+                  />
+
+                  <Text
+                    style={
+                      styles.detailText
+                    }>
+                    {
+                      driver.phone
+                    }
+                  </Text>
+
+                </View>
+
+                <View
+                  style={
+                    styles.detailRow
+                  }>
+
+                  <MaterialDesignIcons
+                    name="card-account-details-outline"
+                    size={16}
+                    color="#64748B"
+                  />
+
+                  <Text
+                    style={
+                      styles.detailText
+                    }>
+                    {
+                      driver.licenseNumber
+                    }
+                  </Text>
+
+                </View>
+
+                <View
+                  style={
+                    styles.detailRow
+                  }>
+
+                  <MaterialDesignIcons
+                    name="calendar-clock-outline"
+                    size={16}
+                    color="#64748B"
+                  />
+
+                  <Text
+                    style={
+                      styles.detailText
+                    }>
+                    License expiry:{' '}
+                    {new Date(
+                      driver.licenseExpiry,
+                    ).toLocaleDateString()}
+                  </Text>
+
+                </View>
+
+              </View>
+
+              {/* DIVIDER */}
+
+              <View
+                style={
+                  styles.divider
+                }
+              />
+
+              {/* ACTIONS */}
+
+              <View
+                style={
+                  styles.actionsRow
+                }>
+
+                <View
+                  style={
+                    styles.actionSpacer
+                  }
+                />
+
+                {/* VIEW */}
+
+                <TouchableOpacity
+                  style={
+                    styles.iconButton
+                  }
+                  activeOpacity={
+                    0.7
+                  }
+                  accessibilityRole="button"
+                  accessibilityLabel={`View ${driver.name}`}
                   onPress={() =>
                     navigation.navigate(
                       'DriverDetails',
@@ -146,14 +460,27 @@ const DriversScreen = () => {
                         driver,
                       },
                     )
-                  }
-                />
-              </View>
+                  }>
 
-              {/* Edit Driver */}
-              <View style={styles.actionButton}>
-                <Button
-                  title="Edit Driver"
+                  <MaterialDesignIcons
+                    name="eye-outline"
+                    size={18}
+                    color="#94A3B8"
+                  />
+
+                </TouchableOpacity>
+
+                {/* EDIT */}
+
+                <TouchableOpacity
+                  style={
+                    styles.iconButton
+                  }
+                  activeOpacity={
+                    0.7
+                  }
+                  accessibilityRole="button"
+                  accessibilityLabel={`Edit ${driver.name}`}
                   onPress={() =>
                     navigation.navigate(
                       'EditDriver',
@@ -161,18 +488,25 @@ const DriversScreen = () => {
                         driver,
                       },
                     )
-                  }
-                />
-              </View>
+                  }>
 
-              {/* Delete Driver */}
-              <View
-                style={
-                  styles.deleteButtonWrapper
-                }>
+                  <MaterialDesignIcons
+                    name="pencil-outline"
+                    size={18}
+                    color="#94A3B8"
+                  />
+
+                </TouchableOpacity>
+
+                {/* DELETE */}
+
                 <TouchableOpacity
-                  style={styles.deleteButton}
-                  activeOpacity={0.7}
+                  style={
+                    styles.iconButton
+                  }
+                  activeOpacity={
+                    0.7
+                  }
                   accessibilityRole="button"
                   accessibilityLabel={`Delete ${driver.name}`}
                   onPress={() =>
@@ -181,211 +515,642 @@ const DriversScreen = () => {
                       driver.name,
                     )
                   }>
-                  <MaterialDesignIcons
-                    name="delete"
-                    size={22}
-                    color="#FFFFFF"
-                  />
-                </TouchableOpacity>
-              </View>
-            </View>
-          </Card>
-        ))}
 
-        {/* Empty State */}
+                  <MaterialDesignIcons
+                    name="trash-can-outline"
+                    size={18}
+                    color="#94A3B8"
+                  />
+
+                </TouchableOpacity>
+
+              </View>
+
+            </View>
+          );
+        })}
+
+        {/* EMPTY STATE */}
+
         {drivers.length === 0 && (
-          <Card>
-            <View style={styles.emptyState}>
+          <View
+            style={
+              styles.emptyCard
+            }>
+
+            <View
+              style={
+                styles.emptyIcon
+              }>
+
               <MaterialDesignIcons
                 name="account-group-outline"
-                size={48}
-                color="#94A3B8"
+                size={32}
+                color="#00D6C9"
               />
 
-              <Text style={styles.emptyTitle}>
-                No drivers
-              </Text>
-
-              <Text style={styles.emptyText}>
-                Your fleet currently has no
-                drivers.
-              </Text>
             </View>
-          </Card>
+
+            <Text
+              style={
+                styles.emptyTitle
+              }>
+              No drivers
+            </Text>
+
+            <Text
+              style={
+                styles.emptyText
+              }>
+              Your fleet currently has
+              no drivers.
+            </Text>
+
+          </View>
         )}
 
-        {/* Add Driver */}
-        <View style={styles.addButton}>
-          <Button
-            title="Add Driver"
-            onPress={() =>
-              navigation.navigate(
-                'AddDriver',
-              )
-            }
-          />
-        </View>
       </ScrollView>
+
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
+
+  /*
+   * ─────────────────────────────────────
+   * SCREEN
+   * ─────────────────────────────────────
+   */
+
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+
+    backgroundColor:
+      '#061426',
   },
 
   content: {
-    paddingHorizontal: 20,
-    paddingVertical: 24,
+    paddingHorizontal:
+      20,
+
+    paddingTop:
+      24,
+
+    /*
+     * Extra space reserved for the
+     * future universal bottom navigation.
+     */
+
+    paddingBottom:
+      150,
   },
 
+  /*
+   * ─────────────────────────────────────
+   * HEADER
+   * ─────────────────────────────────────
+   */
+
   header: {
-    marginBottom: 16,
+    flexDirection:
+      'row',
+
+    alignItems:
+      'center',
+
+    marginBottom:
+      24,
+  },
+
+  headerIcon: {
+    width: 46,
+
+    height: 46,
+
+    borderRadius:
+      14,
+
+    alignItems:
+      'center',
+
+    justifyContent:
+      'center',
+
+    backgroundColor:
+      'rgba(0, 214, 201, 0.10)',
+
+    borderWidth: 1,
+
+    borderColor:
+      'rgba(0, 214, 201, 0.20)',
+
+    marginRight:
+      12,
+  },
+
+  headerText: {
+    flex: 1,
   },
 
   title: {
-    fontSize: 30,
+    fontSize: 28,
+
+    lineHeight: 34,
+
     fontWeight: '800',
-    color: '#0F172A',
+
+    color:
+      '#F8FAFC',
   },
 
   subtitle: {
-    marginTop: 6,
-    fontSize: 15,
-    color: '#64748B',
+    marginTop: 4,
+
+    fontSize: 13,
+
+    lineHeight: 18,
+
+    color:
+      '#94A3B8',
   },
 
-  summary: {
-    marginBottom: 16,
+  /*
+   * ─────────────────────────────────────
+   * SUMMARY + ADD ACTION
+   * ─────────────────────────────────────
+   */
+
+  summaryActionsRow: {
+    flexDirection:
+      'row',
+
+    alignItems:
+      'stretch',
+
+    marginBottom:
+      16,
+
+    gap: 10,
   },
 
-  summaryText: {
-    fontSize: 14,
+  summaryRow: {
+    flex: 1,
+
+    minHeight:
+      70,
+
+    flexDirection:
+      'row',
+
+    alignItems:
+      'center',
+
+    justifyContent:
+      'space-between',
+
+    backgroundColor:
+      '#0B1D33',
+
+    borderWidth: 1,
+
+    borderColor:
+      'rgba(148, 163, 184, 0.12)',
+
+    borderRadius:
+      18,
+
+    paddingHorizontal:
+      16,
+
+    paddingVertical:
+      12,
+  },
+
+  summaryValue: {
+    fontSize: 22,
+
+    lineHeight: 26,
+
+    fontWeight: '800',
+
+    color:
+      '#F8FAFC',
+  },
+
+  summaryLabel: {
+    marginTop: 2,
+
+    fontSize: 12,
+
     fontWeight: '600',
-    color: '#64748B',
+
+    color:
+      '#A8B5C7',
+  },
+
+  summaryAccent: {
+    width: 38,
+
+    height: 38,
+
+    borderRadius: 12,
+
+    alignItems:
+      'center',
+
+    justifyContent:
+      'center',
+
+    backgroundColor:
+      'rgba(0, 214, 201, 0.10)',
+
+    borderWidth: 1,
+
+    borderColor:
+      'rgba(0, 214, 201, 0.18)',
+  },
+
+  addDriverButton: {
+    minHeight:
+      70,
+
+    paddingHorizontal:
+      16,
+
+    borderRadius:
+      18,
+
+    flexDirection:
+      'row',
+
+    alignItems:
+      'center',
+
+    justifyContent:
+      'center',
+
+    backgroundColor:
+      '#00BFB3',
+
+    borderWidth: 1,
+
+    borderColor:
+      'rgba(255, 255, 255, 0.12)',
+
+    shadowColor:
+      '#000000',
+
+    shadowOffset: {
+      width: 0,
+
+      height: 4,
+    },
+
+    shadowOpacity:
+      0.18,
+
+    shadowRadius:
+      8,
+
+    elevation:
+      5,
+  },
+
+  addDriverText: {
+    marginLeft:
+      7,
+
+    fontSize: 12,
+
+    fontWeight: '800',
+
+    color:
+      '#FFFFFF',
+  },
+
+  /*
+   * ─────────────────────────────────────
+   * DRIVER CARD
+   * ─────────────────────────────────────
+   */
+
+  driverCard: {
+    backgroundColor:
+      '#0B1D33',
+
+    borderWidth: 1,
+
+    borderColor:
+      'rgba(148, 163, 184, 0.12)',
+
+    borderRadius:
+      18,
+
+    padding:
+      16,
+
+    marginBottom:
+      12,
   },
 
   driverHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    flexDirection:
+      'row',
+
+    justifyContent:
+      'space-between',
+
+    alignItems:
+      'flex-start',
   },
 
   driverIdentity: {
     flex: 1,
-    paddingRight: 12,
+
+    paddingRight:
+      10,
+  },
+
+  identityRow: {
+    flexDirection:
+      'row',
+
+    alignItems:
+      'center',
+  },
+
+  driverIconChip: {
+    width: 38,
+
+    height: 38,
+
+    borderRadius: 12,
+
+    alignItems:
+      'center',
+
+    justifyContent:
+      'center',
+
+    borderWidth: 1,
+
+    marginRight: 10,
+  },
+
+  identityText: {
+    flex: 1,
   },
 
   driverName: {
-    fontSize: 18,
+    fontSize: 16,
+
+    lineHeight: 20,
+
     fontWeight: '800',
-    color: '#0F172A',
+
+    color:
+      '#F8FAFC',
   },
 
   employeeId: {
     marginTop: 4,
-    fontSize: 13,
+
+    fontSize: 12,
+
+    lineHeight: 16,
+
     fontWeight: '600',
-    color: '#2563EB',
+
+    color:
+      '#00D6C9',
   },
+
+  /*
+   * ─────────────────────────────────────
+   * STATUS
+   * ─────────────────────────────────────
+   */
 
   statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 20,
+    flexDirection:
+      'row',
+
+    alignItems:
+      'center',
+
+    paddingHorizontal:
+      9,
+
+    paddingVertical:
+      6,
+
+    borderRadius:
+      999,
+
+    borderWidth: 1,
   },
 
-  activeBadge: {
-    backgroundColor: '#DCFCE7',
-  },
+  statusDot: {
+    width: 6,
 
-  leaveBadge: {
-    backgroundColor: '#FEE2E2',
-  },
+    height: 6,
 
-  inactiveBadge: {
-    backgroundColor: '#FEF3C7',
+    borderRadius: 3,
+
+    marginRight: 6,
   },
 
   statusText: {
-    fontSize: 12,
-    fontWeight: '700',
+    fontSize: 10,
+
+    lineHeight: 13,
+
+    fontWeight: '800',
   },
 
-  activeText: {
-    color: '#166534',
-  },
-
-  leaveText: {
-    color: '#991B1B',
-  },
-
-  inactiveText: {
-    color: '#92400E',
-  },
+  /*
+   * ─────────────────────────────────────
+   * DRIVER DETAILS
+   * ─────────────────────────────────────
+   */
 
   details: {
-    marginTop: 16,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
+    marginTop:
+      15,
+  },
+
+  detailRow: {
+    flexDirection:
+      'row',
+
+    alignItems:
+      'center',
+
+    marginBottom:
+      8,
   },
 
   detailText: {
-    marginBottom: 5,
-    fontSize: 13,
-    color: '#64748B',
+    marginLeft:
+      9,
+
+    fontSize: 12,
+
+    lineHeight: 17,
+
+    fontWeight: '600',
+
+    color:
+      '#A8B5C7',
   },
 
-  actionButtons: {
-    flexDirection: 'row',
-    marginHorizontal: -4,
-    marginTop: 12,
+  /*
+   * ─────────────────────────────────────
+   * DIVIDER
+   * ─────────────────────────────────────
+   */
+
+  divider: {
+    height: 1,
+
+    backgroundColor:
+      'rgba(148, 163, 184, 0.10)',
+
+    marginTop:
+      6,
   },
 
-  actionButton: {
+  /*
+   * ─────────────────────────────────────
+   * ICON ACTIONS
+   * ─────────────────────────────────────
+   */
+
+  actionsRow: {
+    flexDirection:
+      'row',
+
+    alignItems:
+      'center',
+
+    justifyContent:
+      'flex-end',
+
+    marginTop:
+      12,
+  },
+
+  actionSpacer: {
     flex: 1,
-    paddingHorizontal: 4,
   },
 
-  deleteButtonWrapper: {
-    width: 52,
-    paddingHorizontal: 4,
+  iconButton: {
+    width: 34,
+
+    height: 34,
+
+    alignItems:
+      'center',
+
+    justifyContent:
+      'center',
+
+    borderRadius:
+      10,
+
+    borderWidth: 1,
+
+    borderColor:
+      'rgba(148, 163, 184, 0.18)',
+
+    backgroundColor:
+      'transparent',
+
+    marginLeft:
+      7,
   },
 
-  deleteButton: {
-    height: 48,
-    borderRadius: 8,
-    backgroundColor: '#DC2626',
-    alignItems: 'center',
-    justifyContent: 'center',
+  /*
+   * ─────────────────────────────────────
+   * EMPTY STATE
+   * ─────────────────────────────────────
+   */
+
+  emptyCard: {
+    alignItems:
+      'center',
+
+    justifyContent:
+      'center',
+
+    backgroundColor:
+      '#0B1D33',
+
+    borderWidth: 1,
+
+    borderColor:
+      'rgba(148, 163, 184, 0.12)',
+
+    borderRadius:
+      18,
+
+    paddingVertical:
+      42,
+
+    paddingHorizontal:
+      24,
   },
 
-  addButton: {
-    marginTop: 4,
-    marginBottom: 20,
-  },
+  emptyIcon: {
+    width: 62,
 
-  emptyState: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 30,
+    height: 62,
+
+    borderRadius: 18,
+
+    alignItems:
+      'center',
+
+    justifyContent:
+      'center',
+
+    backgroundColor:
+      'rgba(0, 214, 201, 0.10)',
+
+    borderWidth: 1,
+
+    borderColor:
+      'rgba(0, 214, 201, 0.18)',
   },
 
   emptyTitle: {
-    marginTop: 12,
+    marginTop:
+      14,
+
     fontSize: 18,
-    fontWeight: '700',
-    color: '#0F172A',
+
+    lineHeight: 23,
+
+    fontWeight: '800',
+
+    color:
+      '#F8FAFC',
   },
 
   emptyText: {
-    marginTop: 6,
-    fontSize: 14,
-    color: '#64748B',
-    textAlign: 'center',
+    marginTop:
+      6,
+
+    fontSize: 13,
+
+    lineHeight: 19,
+
+    color:
+      '#A8B5C7',
+
+    textAlign:
+      'center',
   },
 });
 
