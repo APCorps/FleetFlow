@@ -1,6 +1,10 @@
-import React, {useState} from 'react';
+import React, {useEffect, useRef, useState} from 'react';
 
 import {
+  AccessibilityInfo,
+  Animated,
+  Easing,
+  GestureResponderEvent,
   Modal,
   Pressable,
   StyleSheet,
@@ -12,18 +16,15 @@ import {
   SafeAreaView,
 } from 'react-native-safe-area-context';
 
-import {useNavigation} from '@react-navigation/native';
-
-import type {
-  NativeStackNavigationProp,
-} from '@react-navigation/native-stack';
-
 import MaterialDesignIcons from
   '@react-native-vector-icons/material-design-icons';
 
-import {
-  FloatingBottomNav,
-} from '../../components';
+import Svg, {
+  Circle,
+  Path,
+  Polyline,
+  Rect,
+} from 'react-native-svg';
 
 import {
   useAccounts,
@@ -35,19 +36,8 @@ import {
 } from '../../store';
 
 import type {
-  RootStackParamList,
-} from '../../navigation/AppNavigator';
-
-/*
- * ─────────────────────────────────────
- * NAVIGATION
- * ─────────────────────────────────────
- */
-
-type DashboardNavigationProp =
-  NativeStackNavigationProp<
-    RootStackParamList
-  >;
+  BottomNavRoute,
+} from '../../components/FloatingBottomNav/FloatingBottomNav';
 
 /*
  * ─────────────────────────────────────
@@ -71,6 +61,13 @@ const FLEET_COLORS = {
   drivers: '#00D6C9',
   trips: '#9B5CFF',
   maintenance: '#FF9F1C',
+} as const;
+
+const FLEET_CARD_SURFACES = {
+  vehicles: '#071828',
+  drivers: '#06201F',
+  trips: '#120A22',
+  maintenance: '#211808',
 } as const;
 
 /*
@@ -106,6 +103,40 @@ const FINANCIAL_COLORS = {
  * ─────────────────────────────────────
  */
 
+/*
+ * ─────────────────────────────────────
+ * FLEET STAT CARD
+ * ─────────────────────────────────────
+ *
+ * Each card has its own ambient motion:
+ *
+ * Vehicles:
+ *   route path + moving vehicle dot +
+ *   diagonal data streams.
+ *
+ * Drivers:
+ *   ECG pulse + breathing ring.
+ *
+ * Trips:
+ *   constellation particles +
+ *   orbital navigation dot.
+ *
+ * Maintenance:
+ *   kinetic border segment.
+ */
+
+type FleetCardCategory =
+  | 'vehicles'
+  | 'drivers'
+  | 'trips'
+  | 'maintenance';
+
+const AnimatedSvgPath =
+  Animated.createAnimatedComponent(Path);
+
+const AnimatedSvgRect =
+  Animated.createAnimatedComponent(Rect);
+
 const StatCard = ({
   icon,
   color,
@@ -113,6 +144,11 @@ const StatCard = ({
   value,
   subtitle,
   subtitleColor,
+  cardBackground,
+  category,
+  onPress,
+  entranceDelay,
+  reduceMotion,
 }: {
   icon: DashboardIconName;
   color: string;
@@ -120,82 +156,1152 @@ const StatCard = ({
   value: number;
   subtitle: string;
   subtitleColor: string;
+  cardBackground: string;
+  category: FleetCardCategory;
+  onPress: () => void;
+  entranceDelay: number;
+  reduceMotion: boolean;
 }) => {
+  /*
+   * ─────────────────────────────────────
+   * ENTRANCE
+   * ─────────────────────────────────────
+   */
+
+  const entranceOpacity = useRef(
+    new Animated.Value(0),
+  ).current;
+
+  const entranceTranslateY = useRef(
+    new Animated.Value(18),
+  ).current;
+
+  /*
+   * ─────────────────────────────────────
+   * INTERACTION
+   * ─────────────────────────────────────
+   *
+   * These values stay JS-driven for the
+   * entire lifetime of the card because
+   * touch-position updates use setValue().
+   * React Native does not allow the same
+   * Animated.Value to switch between the
+   * native and JS animation drivers.
+   */
+
+  const interactionScale = useRef(
+    new Animated.Value(1),
+  ).current;
+
+  const rotateX = useRef(
+    new Animated.Value(0),
+  ).current;
+
+  const rotateY = useRef(
+    new Animated.Value(0),
+  ).current;
+
+  const touchFrame = useRef<number | null>(
+    null,
+  );
+
+  const cardSize = useRef({
+    width: 1,
+    height: 1,
+  }).current;
+
+  /*
+   * ─────────────────────────────────────
+   * CATEGORY MOTION
+   * ─────────────────────────────────────
+   */
+
+  const categoryProgress = useRef(
+    new Animated.Value(0),
+  ).current;
+
+  const categoryAnimation =
+    useRef<Animated.CompositeAnimation | null>(
+      null,
+    );
+
+  /*
+   * Decorative motion opacity.
+   *
+   * It is subdued during a press so the
+   * tactile feedback remains dominant.
+   */
+
+  const ambientOpacity = useRef(
+    new Animated.Value(1),
+  ).current;
+
+  /*
+   * ─────────────────────────────────────
+   * ENTRANCE ANIMATION
+   * ─────────────────────────────────────
+   */
+
+  useEffect(() => {
+    entranceOpacity.stopAnimation();
+    entranceTranslateY.stopAnimation();
+
+    entranceOpacity.setValue(0);
+
+    entranceTranslateY.setValue(
+      reduceMotion ? 0 : 18,
+    );
+
+    const entrance =
+      Animated.sequence([
+        ...(reduceMotion
+          ? []
+          : [
+              Animated.delay(
+                entranceDelay,
+              ),
+            ]),
+
+        Animated.parallel([
+          Animated.timing(
+            entranceOpacity,
+            {
+              toValue: 1,
+              duration: reduceMotion
+                ? 180
+                : 260,
+              easing:
+                Easing.out(
+                  Easing.quad,
+                ),
+              useNativeDriver: true,
+            },
+          ),
+
+          ...(reduceMotion
+            ? []
+            : [
+                Animated.timing(
+                  entranceTranslateY,
+                  {
+                    toValue: 0,
+                    duration: 280,
+                    easing:
+                      Easing.out(
+                        Easing.cubic,
+                      ),
+                    useNativeDriver: true,
+                  },
+                ),
+              ]),
+        ]),
+      ]);
+
+    entrance.start();
+
+    return () => {
+      entrance.stop();
+    };
+  }, [
+    entranceDelay,
+    reduceMotion,
+    entranceOpacity,
+    entranceTranslateY,
+  ]);
+
+  /*
+   * ─────────────────────────────────────
+   * CATEGORY AMBIENT LOOP
+   * ─────────────────────────────────────
+   *
+   * Uses a single JS-driven progress value.
+   * This value feeds the category-specific
+   * SVG dash/path motion. The native-driven
+   * entrance and popup animations use their
+   * own Animated.Values and never share the
+   * category progress node.
+   */
+
+  useEffect(() => {
+    categoryAnimation.current?.stop();
+
+    categoryProgress.stopAnimation();
+    categoryProgress.setValue(0);
+
+    if (reduceMotion) {
+      return () => {
+        categoryAnimation.current?.stop();
+      };
+    }
+
+    const duration =
+      category === 'vehicles'
+        ? 3200
+        : category === 'drivers'
+        ? 3000
+        : category === 'trips'
+        ? 3500
+        : 3800;
+
+    const loop = Animated.loop(
+      Animated.timing(
+        categoryProgress,
+        {
+          toValue: 1,
+          duration,
+          easing:
+            Easing.inOut(Easing.sin),
+          useNativeDriver: false,
+        },
+      ),
+    );
+
+    categoryAnimation.current = loop;
+    loop.start();
+
+    return () => {
+      loop.stop();
+      if (
+        categoryAnimation.current === loop
+      ) {
+        categoryAnimation.current = null;
+      }
+    };
+  }, [
+    category,
+    reduceMotion,
+    categoryProgress,
+    categoryAnimation,
+  ]);
+
+  /*
+   * ─────────────────────────────────────
+   * INTERACTION / PRESS
+   * ─────────────────────────────────────
+   */
+
+  const handleTouchStart = () => {
+    const animations: Animated.CompositeAnimation[] =
+      [
+        Animated.timing(
+          interactionScale,
+          {
+            toValue: 0.97,
+            duration: 100,
+            easing:
+              Easing.out(
+                Easing.quad,
+              ),
+            useNativeDriver: false,
+          },
+        ),
+        Animated.timing(
+          ambientOpacity,
+          {
+            toValue:
+              reduceMotion
+                ? 1
+                : 0.18,
+            duration: 100,
+            easing:
+              Easing.out(
+                Easing.quad,
+              ),
+            useNativeDriver: false,
+          },
+        ),
+      ];
+
+    Animated.parallel(
+      animations,
+    ).start();
+  };
+
+  /*
+   * ─────────────────────────────────────
+   * TILT
+   * ─────────────────────────────────────
+   */
+
+  const handleTouchMove = (
+    event: GestureResponderEvent,
+  ) => {
+    if (reduceMotion) {
+      return;
+    }
+
+    const {
+      locationX,
+      locationY,
+    } = event.nativeEvent;
+
+    if (touchFrame.current !== null) {
+      return;
+    }
+
+    touchFrame.current =
+      requestAnimationFrame(() => {
+        touchFrame.current = null;
+
+        const normalizedX =
+          cardSize.width > 1
+            ? (locationX /
+                cardSize.width) *
+                2 -
+              1
+            : 0;
+
+        const normalizedY =
+          cardSize.height > 1
+            ? (locationY /
+                cardSize.height) *
+                2 -
+              1
+            : 0;
+
+        const clampedX =
+          Math.max(
+            -1,
+            Math.min(
+              1,
+              normalizedX,
+            ),
+          );
+
+        const clampedY =
+          Math.max(
+            -1,
+            Math.min(
+              1,
+              normalizedY,
+            ),
+          );
+
+        rotateY.setValue(
+          clampedX * 9,
+        );
+
+        rotateX.setValue(
+          clampedY * -7,
+        );
+
+        interactionScale.setValue(
+          1.02,
+        );
+      });
+  };
+
+  const resetTilt = () => {
+    if (
+      touchFrame.current !==
+      null
+    ) {
+      cancelAnimationFrame(
+        touchFrame.current,
+      );
+
+      touchFrame.current = null;
+    }
+
+    if (reduceMotion) {
+      rotateX.setValue(0);
+      rotateY.setValue(0);
+      return;
+    }
+
+    Animated.parallel([
+      Animated.spring(
+        rotateX,
+        {
+          toValue: 0,
+          damping: 16,
+          stiffness: 180,
+          mass: 0.7,
+          useNativeDriver: false,
+        },
+      ),
+
+      Animated.spring(
+        rotateY,
+        {
+          toValue: 0,
+          damping: 16,
+          stiffness: 180,
+          mass: 0.7,
+          useNativeDriver: false,
+        },
+      ),
+    ]).start();
+  };
+
+  const handleTouchEnd = () => {
+    Animated.parallel([
+      Animated.spring(
+        interactionScale,
+        {
+          toValue: 1,
+          damping: 14,
+          stiffness: 220,
+          mass: 0.65,
+          useNativeDriver: false,
+        },
+      ),
+
+      Animated.timing(
+        ambientOpacity,
+        {
+          toValue: 1,
+          duration: 180,
+          easing:
+            Easing.out(
+              Easing.quad,
+            ),
+          useNativeDriver: false,
+        },
+      ),
+    ]).start();
+
+    resetTilt();
+  };
+
+  /*
+   * ─────────────────────────────────────
+   * SHARED PROGRESS
+   * ─────────────────────────────────────
+   */
+
+  const p = categoryProgress;
+
+  /*
+   * ─────────────────────────────────────
+   * VEHICLES
+   * ─────────────────────────────────────
+   */
+
+  const vehicleDotX =
+    p.interpolate({
+      inputRange: [
+        0,
+        0.125,
+        0.25,
+        0.375,
+        0.5,
+        0.625,
+        0.75,
+        0.875,
+        1,
+      ],
+      outputRange: [
+        4,
+        11,
+        18,
+        29,
+        43,
+        56,
+        67,
+        75,
+        4,
+      ],
+    });
+
+  const vehicleDotY =
+    p.interpolate({
+      inputRange: [
+        0,
+        0.125,
+        0.25,
+        0.375,
+        0.5,
+        0.625,
+        0.75,
+        0.875,
+        1,
+      ],
+      outputRange: [
+        34,
+        30,
+        24,
+        18,
+        14,
+        16,
+        20,
+        28,
+        34,
+      ],
+    });
+
+  const dataStreamX =
+    p.interpolate({
+      inputRange: [0, 1],
+      outputRange: [-120, 120],
+    });
+
+  /*
+   * ─────────────────────────────────────
+   * DRIVERS
+   * ─────────────────────────────────────
+   */
+
+  const driversDashOffset =
+    p.interpolate({
+      inputRange: [0, 1],
+      outputRange: [80, 0],
+    });
+
+  const breathingScale =
+    p.interpolate({
+      inputRange: [
+        0,
+        0.25,
+        0.5,
+        0.75,
+        1,
+      ],
+      outputRange: [
+        0.92,
+        1.08,
+        0.92,
+        1.08,
+        0.92,
+      ],
+    });
+
+  const breathingOpacity =
+    p.interpolate({
+      inputRange: [
+        0,
+        0.25,
+        0.5,
+        0.75,
+        1,
+      ],
+      outputRange: [
+        0.22,
+        0.08,
+        0.22,
+        0.08,
+        0.22,
+      ],
+    });
+
+  /*
+   * ─────────────────────────────────────
+   * TRIPS
+   * ─────────────────────────────────────
+   */
+
+  const tripOrbitX =
+    p.interpolate({
+      inputRange: [
+        0,
+        0.25,
+        0.5,
+        0.75,
+        1,
+      ],
+      outputRange: [
+        0,
+        13,
+        0,
+        -13,
+        0,
+      ],
+    });
+
+  const tripOrbitY =
+    p.interpolate({
+      inputRange: [
+        0,
+        0.25,
+        0.5,
+        0.75,
+        1,
+      ],
+      outputRange: [
+        -9,
+        0,
+        9,
+        0,
+        -9,
+      ],
+    });
+
+  const constellationPulse =
+    p.interpolate({
+      inputRange: [
+        0,
+        0.2,
+        0.4,
+        0.6,
+        0.8,
+        1,
+      ],
+      outputRange: [
+        0.34,
+        0.58,
+        0.30,
+        0.62,
+        0.30,
+        0.34,
+      ],
+    });
+
+  const constellationScale =
+    p.interpolate({
+      inputRange: [
+        0,
+        0.5,
+        1,
+      ],
+      outputRange: [
+        0.94,
+        1.06,
+        0.94,
+      ],
+    });
+
+  /*
+   * ─────────────────────────────────────
+   * MAINTENANCE
+   * ─────────────────────────────────────
+   */
+
+  const maintenanceDashOffset =
+    p.interpolate({
+      inputRange: [0, 1],
+      outputRange: [400, 0],
+    });
+
+  /*
+   * ─────────────────────────────────────
+   * CARD
+   * ─────────────────────────────────────
+   */
+
   return (
-    <View style={styles.statCard}>
+    <Animated.View
+      style={[
+        styles.statCard,
+        {
+          opacity:
+            entranceOpacity,
+          transform: [
+            {
+              perspective: 1000,
+            },
+            {
+              translateY:
+                entranceTranslateY,
+            },
+            {
+              scale:
+                interactionScale,
+            },
+            ...(reduceMotion
+              ? []
+              : [
+                  {
+                    rotateX:
+                      rotateX.interpolate(
+                        {
+                          inputRange: [
+                            -10,
+                            10,
+                          ],
+                          outputRange: [
+                            '-10deg',
+                            '10deg',
+                          ],
+                        },
+                      ),
+                  },
+                  {
+                    rotateY:
+                      rotateY.interpolate(
+                        {
+                          inputRange: [
+                            -10,
+                            10,
+                          ],
+                          outputRange: [
+                            '-10deg',
+                            '10deg',
+                          ],
+                        },
+                      ),
+                  },
+                ]),
+          ],
+        },
+      ]}>
 
-      <View style={styles.statCardInner}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Open ${title}`}
+        accessibilityHint={`View ${title} details`}
+        hitSlop={4}
+        onPress={onPress}
+        onTouchStart={
+          handleTouchStart
+        }
+        onTouchMove={
+          handleTouchMove
+        }
+        onTouchEnd={
+          handleTouchEnd
+        }
+        onTouchCancel={
+          handleTouchEnd
+        }
+        onLayout={event => {
+          cardSize.width =
+            event.nativeEvent.layout.width;
 
-        {/* ICON */}
+          cardSize.height =
+            event.nativeEvent.layout.height;
+        }}
+        style={[
+          styles.statCardInner,
+          {
+            backgroundColor:
+              cardBackground,
+            borderColor:
+              `${color}30`,
+          },
+        ]}>
+
+        {/* CATEGORY DECORATION */}
 
         <View
-          style={[
-            styles.statIcon,
-            {
-              backgroundColor:
-                `${color}18`,
-              borderColor:
-                `${color}28`,
-            },
-          ]}>
+          pointerEvents="none"
+          style={
+            styles.categoryMotionLayer
+          }>
 
-          <MaterialDesignIcons
-            name={icon}
-            size={21}
-            color={color}
-          />
+          {/* ─────────────────────
+              VEHICLES
+             ───────────────────── */}
+
+          {category ===
+            'vehicles' && (
+            <>
+              <Svg
+                style={
+                  styles.vehicleRouteSvg
+                }
+                width="100%"
+                height="52"
+                viewBox="0 0 84 52">
+
+                <Path
+                  d="M4 36 C18 12, 29 42, 43 23 C55 7, 67 17, 80 8"
+                  fill="none"
+                  stroke={color}
+                  strokeWidth="1.5"
+                  strokeOpacity={0.30}
+                  strokeDasharray="3 5"
+                  strokeLinecap="round"
+                />
+
+                <AnimatedSvgPath
+                  d="M4 36 C18 12, 29 42, 43 23 C55 7, 67 17, 80 8"
+                  fill="none"
+                  stroke={color}
+                  strokeWidth="1.9"
+                  strokeOpacity={
+                    Animated.multiply(
+                      ambientOpacity,
+                      0.50,
+                    )
+                  }
+                  strokeDasharray="1 14"
+                  strokeDashoffset={p}
+                />
+
+              </Svg>
+
+              <Animated.View
+                style={[
+                  styles.vehicleMotionDot,
+                  {
+                    backgroundColor:
+                      color,
+                    opacity:
+                      Animated.multiply(
+                        ambientOpacity,
+                        0.68,
+                      ),
+                    transform: [
+                      {
+                        translateX:
+                          vehicleDotX,
+                      },
+                      {
+                        translateY:
+                          vehicleDotY,
+                      },
+                    ],
+                  },
+                ]}
+              />
+
+              {[0, 1, 2].map(
+                stream => (
+                  <Animated.View
+                    key={`vehicle-stream-${stream}`}
+                    style={[
+                      styles.vehicleDataStream,
+                      {
+                        backgroundColor:
+                          color,
+                        opacity:
+                          Animated.multiply(
+                            ambientOpacity,
+                            0.10 +
+                              stream *
+                                0.02,
+                          ),
+                        transform: [
+                          {
+                            translateX:
+                              Animated.add(
+                                dataStreamX,
+                                stream *
+                                  42,
+                              ),
+                          },
+                          {
+                            rotate:
+                              '-25deg',
+                          },
+                        ],
+                      },
+                    ]}
+                  />
+                ),
+              )}
+            </>
+          )}
+
+          {/* ─────────────────────
+              DRIVERS
+             ───────────────────── */}
+
+          {category ===
+            'drivers' && (
+            <>
+              <Svg
+                style={
+                  styles.driverEcgSvg
+                }
+                width="100%"
+                height="42"
+                viewBox="0 0 120 42">
+
+                <Path
+                  d="M2 23 H25 L31 23 L36 8 L42 31 L48 18 L54 23 H82 L87 23 L93 12 L99 28 L105 22 H118"
+                  fill="none"
+                  stroke={color}
+                  strokeWidth="1.5"
+                  strokeOpacity={0.32}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeDasharray="8 5"
+                />
+
+                <AnimatedSvgPath
+                  d="M2 23 H25 L31 23 L36 8 L42 31 L48 18 L54 23 H82 L87 23 L93 12 L99 28 L105 22 H118"
+                  fill="none"
+                  stroke={color}
+                  strokeWidth="2.0"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeDasharray="18 62"
+                  strokeDashoffset={
+                    driversDashOffset
+                  }
+                  strokeOpacity={
+                    Animated.multiply(
+                      ambientOpacity,
+                      0.68,
+                    )
+                  }
+                />
+
+              </Svg>
+
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  styles.driverBreathingRing,
+                  {
+                    borderColor:
+                      color,
+                    opacity:
+                      Animated.multiply(
+                        ambientOpacity,
+                        breathingOpacity,
+                      ),
+                    transform: [
+                      {
+                        scale:
+                          breathingScale,
+                      },
+                    ],
+                  },
+                ]}
+              />
+            </>
+          )}
+
+          {/* ─────────────────────
+              TRIPS
+             ───────────────────── */}
+
+          {category ===
+            'trips' && (
+            <>
+              <Svg
+                style={
+                  styles.tripConstellationSvg
+                }
+                width="100%"
+                height="62"
+                viewBox="0 0 120 62">
+
+                <Path
+                  d="M9 17 L37 8 L61 23 L91 11 L111 29 M37 8 L52 48 L91 11 L77 54 L111 29 M9 17 L52 48"
+                  fill="none"
+                  stroke={color}
+                  strokeWidth="0.8"
+                  strokeOpacity={0.28}
+                />
+
+              </Svg>
+
+              {[
+                {
+                  x: 12,
+                  y: 18,
+                  delay: 0,
+                },
+                {
+                  x: 40,
+                  y: 9,
+                  delay: 0.12,
+                },
+                {
+                  x: 64,
+                  y: 24,
+                  delay: 0.24,
+                },
+                {
+                  x: 93,
+                  y: 12,
+                  delay: 0.36,
+                },
+                {
+                  x: 78,
+                  y: 54,
+                  delay: 0.48,
+                },
+                {
+                  x: 110,
+                  y: 30,
+                  delay: 0.60,
+                },
+              ].map(
+                particle => (
+                  <Animated.View
+                    key={`${particle.x}-${particle.y}`}
+                    pointerEvents="none"
+                    style={[
+                      styles.tripParticle,
+                      {
+                        left:
+                          `${particle.x}%`,
+                        top:
+                          particle.y,
+                        backgroundColor:
+                          color,
+                        opacity:
+                          Animated.multiply(
+                            ambientOpacity,
+                            constellationPulse,
+                          ),
+                        transform: [
+                          {
+                            scale:
+                              constellationScale,
+                          },
+                        ],
+                      },
+                    ]}
+                  />
+                ),
+              )}
+
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  styles.tripOrbitDot,
+                  {
+                    backgroundColor:
+                      color,
+                    opacity:
+                      Animated.multiply(
+                        ambientOpacity,
+                        0.72,
+                      ),
+                    transform: [
+                      {
+                        translateX:
+                          tripOrbitX,
+                      },
+                      {
+                        translateY:
+                          tripOrbitY,
+                      },
+                    ],
+                  },
+                ]}
+              />
+            </>
+          )}
+
+          {/* ─────────────────────
+              MAINTENANCE
+             ───────────────────── */}
+
+          {category ===
+            'maintenance' && (
+            <Svg
+              pointerEvents="none"
+              style={
+                styles.maintenanceBorderSvg
+              }
+              width="100%"
+              height="100%"
+              viewBox="0 0 100 100"
+              preserveAspectRatio="none">
+
+              <Rect
+                x="1"
+                y="1"
+                width="98"
+                height="98"
+                rx="15"
+                fill="none"
+                stroke={color}
+                strokeWidth="1.2"
+                strokeOpacity={0.14}
+              />
+
+              <AnimatedSvgRect
+                x="1"
+                y="1"
+                width="98"
+                height="98"
+                rx="15"
+                fill="none"
+                stroke={color}
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeDasharray="16 384"
+                strokeDashoffset={
+                  maintenanceDashOffset
+                }
+                strokeOpacity={
+                  Animated.multiply(
+                    ambientOpacity,
+                    0.70,
+                  )
+                }
+              />
+
+            </Svg>
+          )}
 
         </View>
 
-        {/* TITLE */}
-
-        <Text
-          style={styles.statTitle}
-          numberOfLines={1}>
-          {title}
-        </Text>
-
-        {/* VALUE + STATUS */}
+        {/* CONTENT */}
 
         <View
-          style={styles.statBottomRow}>
+          pointerEvents="none"
+          style={
+            styles.statCardContent
+          }>
+
+          <View
+            style={[
+              styles.statIcon,
+              {
+                backgroundColor:
+                  `${color}18`,
+                borderColor:
+                  `${color}35`,
+              },
+            ]}>
+
+            <MaterialDesignIcons
+              name={icon}
+              size={21}
+              color={color}
+            />
+
+          </View>
 
           <Text
-            style={styles.statValue}>
-            {value}
+            style={styles.statTitle}
+            numberOfLines={1}>
+            {title}
           </Text>
 
           <View
-            style={styles.statStatusRow}>
-
-            <View
-              style={[
-                styles.statusDot,
-                {
-                  backgroundColor:
-                    subtitleColor,
-                },
-              ]}
-            />
+            style={
+              styles.statBottomRow
+            }>
 
             <Text
-              style={[
-                styles.statSubtitle,
-                {
-                  color:
-                    subtitleColor,
-                },
-              ]}>
-              {subtitle}
+              style={styles.statValue}>
+              {value}
             </Text>
+
+            <View
+              style={
+                styles.statStatusRow
+              }>
+
+              <View
+                style={[
+                  styles.statusDot,
+                  {
+                    backgroundColor:
+                      subtitleColor,
+                  },
+                ]}
+              />
+
+              <Text
+                style={[
+                  styles.statSubtitle,
+                  {
+                    color:
+                      subtitleColor,
+                  },
+                ]}>
+                {subtitle}
+              </Text>
+
+            </View>
 
           </View>
 
         </View>
 
-      </View>
+      </Pressable>
 
-    </View>
+    </Animated.View>
   );
 };
 
@@ -288,14 +1394,19 @@ const ActivityRow = ({
  * ─────────────────────────────────────
  */
 
-const DashboardScreen = () => {
+type DashboardScreenProps = {
+  onNavigate?: (
+    route: BottomNavRoute | 'Maintenance',
+  ) => void;
+};
+
+const DashboardScreen = ({
+  onNavigate,
+}: DashboardScreenProps) => {
 
   /*
    * ALL HOOKS AT THE TOP
    */
-
-  const navigation =
-    useNavigation<DashboardNavigationProp>();
 
   const {
     user,
@@ -328,6 +1439,57 @@ const DashboardScreen = () => {
     profileMenuVisible,
     setProfileMenuVisible,
   ] = useState(false);
+
+  const [
+    profilePopupMounted,
+    setProfilePopupMounted,
+  ] = useState(false);
+
+  const profilePopupOpacity = useRef(
+    new Animated.Value(0),
+  ).current;
+
+  const profilePopupScale = useRef(
+    new Animated.Value(0.96),
+  ).current;
+
+  const profilePopupTranslateY = useRef(
+    new Animated.Value(-8),
+  ).current;
+
+  const profileBackdropOpacity = useRef(
+    new Animated.Value(0),
+  ).current;
+
+  const [
+    reduceMotion,
+    setReduceMotion,
+  ] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+
+    AccessibilityInfo.isReduceMotionEnabled().then(
+      enabled => {
+        if (mounted) {
+          setReduceMotion(enabled);
+        }
+      },
+    );
+
+    const subscription =
+      AccessibilityInfo.addEventListener(
+        'reduceMotionChanged',
+        enabled => {
+          setReduceMotion(enabled);
+        },
+      );
+
+    return () => {
+      mounted = false;
+      subscription.remove();
+    };
+  }, []);
 
   /*
    * ─────────────────────────────────────
@@ -446,6 +1608,100 @@ const DashboardScreen = () => {
     }
   };
 
+  const openProfileMenu = () => {
+    setProfilePopupMounted(true);
+    setProfileMenuVisible(true);
+
+    profilePopupOpacity.stopAnimation();
+    profilePopupScale.stopAnimation();
+    profilePopupTranslateY.stopAnimation();
+    profileBackdropOpacity.stopAnimation();
+
+    profilePopupOpacity.setValue(0);
+    profilePopupScale.setValue(0.96);
+    profilePopupTranslateY.setValue(-8);
+    profileBackdropOpacity.setValue(0);
+
+    Animated.parallel([
+      Animated.timing(profileBackdropOpacity, {
+        toValue: 1,
+        duration: 160,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.timing(profilePopupOpacity, {
+        toValue: 1,
+        duration: 170,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.timing(profilePopupScale, {
+        toValue: 1,
+        duration: 190,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(profilePopupTranslateY, {
+        toValue: 0,
+        duration: 190,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const closeProfileMenu = () => {
+    if (!profilePopupMounted) {
+      return;
+    }
+
+    Animated.parallel([
+      Animated.timing(profileBackdropOpacity, {
+        toValue: 0,
+        duration: 130,
+        easing: Easing.in(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.timing(profilePopupOpacity, {
+        toValue: 0,
+        duration: 130,
+        easing: Easing.in(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.timing(profilePopupScale, {
+        toValue: 0.96,
+        duration: 130,
+        easing: Easing.in(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(profilePopupTranslateY, {
+        toValue: -8,
+        duration: 130,
+        easing: Easing.in(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start(({finished}) => {
+      if (finished) {
+        setProfileMenuVisible(false);
+        setProfilePopupMounted(false);
+      }
+    });
+  };
+
+  useEffect(() => {
+    return () => {
+      profilePopupOpacity.stopAnimation();
+      profilePopupScale.stopAnimation();
+      profilePopupTranslateY.stopAnimation();
+      profileBackdropOpacity.stopAnimation();
+    };
+  }, [
+    profilePopupOpacity,
+    profilePopupScale,
+    profilePopupTranslateY,
+    profileBackdropOpacity,
+  ]);
+
   /*
    * ─────────────────────────────────────
    * RENDER
@@ -527,9 +1783,7 @@ const DashboardScreen = () => {
                   profileMenuVisible,
               }}
               hitSlop={8}
-              onPress={() =>
-                setProfileMenuVisible(true)
-              }
+              onPress={openProfileMenu}
               style={({pressed}) => [
                 styles.profileButton,
                 pressed &&
@@ -588,14 +1842,6 @@ const DashboardScreen = () => {
             FLEET OVERVIEW
           </Text>
 
-          <Text
-            style={
-              styles.sectionSubtitle
-            }>
-            Monitor your fleet's
-            current operational status
-          </Text>
-
         </View>
 
         {/* 2 × 2 CARD GRID */}
@@ -608,12 +1854,21 @@ const DashboardScreen = () => {
             color={
               FLEET_COLORS.vehicles
             }
+            cardBackground={
+              FLEET_CARD_SURFACES.vehicles
+            }
+            category="vehicles" 
             title="Total Vehicles"
             value={totalVehicles}
             subtitle={`${activeVehicles} Active`}
             subtitleColor={
               STATUS_COLORS.info
             }
+            onPress={() =>
+              onNavigate?.('Vehicles')
+            }
+            entranceDelay={0}
+            reduceMotion={reduceMotion}
           />
 
           <StatCard
@@ -621,12 +1876,21 @@ const DashboardScreen = () => {
             color={
               FLEET_COLORS.drivers
             }
+            cardBackground={
+              FLEET_CARD_SURFACES.drivers
+            }
+            category="drivers" 
             title="Total Drivers"
             value={totalDrivers}
             subtitle={`${activeDrivers} Active`}
             subtitleColor={
               STATUS_COLORS.info
             }
+            onPress={() =>
+              onNavigate?.('Drivers')
+            }
+            entranceDelay={65}
+            reduceMotion={reduceMotion}
           />
 
           <StatCard
@@ -634,12 +1898,21 @@ const DashboardScreen = () => {
             color={
               FLEET_COLORS.trips
             }
+            cardBackground={
+              FLEET_CARD_SURFACES.trips
+            }
+            category="trips" 
             title="Total Trips"
             value={totalTrips}
             subtitle={`${inProgressTrips} In Progress`}
             subtitleColor={
               STATUS_COLORS.info
             }
+            onPress={() =>
+              onNavigate?.('Trips')
+            }
+            entranceDelay={130}
+            reduceMotion={reduceMotion}
           />
 
           <StatCard
@@ -647,6 +1920,10 @@ const DashboardScreen = () => {
             color={
               FLEET_COLORS.maintenance
             }
+            cardBackground={
+              FLEET_CARD_SURFACES.maintenance
+            }
+            category="maintenance" 
             title="Maintenance"
             value={
               maintenanceVehicles
@@ -655,6 +1932,13 @@ const DashboardScreen = () => {
             subtitleColor={
               STATUS_COLORS.warning
             }
+            onPress={() =>
+              onNavigate?.(
+                'Maintenance',
+              )
+            }
+            entranceDelay={195}
+            reduceMotion={reduceMotion}
           />
 
         </View>
@@ -1030,32 +2314,51 @@ const DashboardScreen = () => {
       {/* PROFILE MODAL */}
 
       <Modal
-        visible={profileMenuVisible}
+        visible={profilePopupMounted}
         transparent
-        animationType="fade"
+        animationType="none"
         statusBarTranslucent
-        onRequestClose={() =>
-          setProfileMenuVisible(false)
-        }>
+        onRequestClose={closeProfileMenu}>
 
         <View
           style={
             styles.profileModalContainer
           }>
 
-          <Pressable
-            style={
-              styles.profileModalBackdrop
-            }
-            onPress={() =>
-              setProfileMenuVisible(false)
-            }
-          />
+          <Animated.View
+            pointerEvents="box-none"
+            style={[
+              styles.profileModalBackdropContainer,
+              {
+                opacity: profileBackdropOpacity,
+              },
+            ]}>
+            <Pressable
+              style={
+                styles.profileModalBackdrop
+              }
+              accessibilityRole="button"
+              accessibilityLabel="Close profile menu"
+              onPress={closeProfileMenu}
+            />
+          </Animated.View>
 
-          <View
-            style={
-              styles.profileModalMenu
-            }>
+          <Animated.View
+            style={[
+              styles.profileModalMenu,
+              {
+                opacity: profilePopupOpacity,
+                transform: [
+                  {
+                    translateY:
+                      profilePopupTranslateY,
+                  },
+                  {
+                    scale: profilePopupScale,
+                  },
+                ],
+              },
+            ]}>
 
             <View
               style={
@@ -1147,13 +2450,11 @@ const DashboardScreen = () => {
 
             </Pressable>
 
-          </View>
+          </Animated.View>
 
         </View>
 
       </Modal>
-
-     
 
     </SafeAreaView>
   );
@@ -1383,17 +2684,34 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
 
-  profileModalBackdrop: {
-    ...StyleSheet.absoluteFillObject,
+  profileModalBackdropContainer: {
+  position: 'absolute',
 
-    backgroundColor:
-      'rgba(0, 0, 0, 0.18)',
-  },
+  top: 0,
+  right: 0,
+  bottom: 0,
+  left: 0,
+
+  zIndex: 1,
+},
+
+profileModalBackdrop: {
+  position: 'absolute',
+
+  top: 0,
+  right: 0,
+  bottom: 0,
+  left: 0,
+
+  backgroundColor:
+    'rgba(0, 0, 0, 0.18)',
+},
 
   profileModalMenu: {
+    zIndex: 2,
     position: 'absolute',
 
-    top: 58,
+    top: 84,
 
     right: 22,
 
@@ -1648,6 +2966,8 @@ const styles = StyleSheet.create({
   statCardInner: {
     minHeight: 104,
 
+    position: 'relative',
+
     paddingHorizontal: 12,
 
     paddingVertical: 11,
@@ -1678,6 +2998,134 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.16,
 
     shadowRadius: 8,
+
+    overflow: 'hidden',
+  },
+
+  statAmbientGlow: {
+    position: 'absolute',
+
+    width: 130,
+    height: 130,
+
+    borderRadius: 65,
+
+    top: -54,
+    right: -38,
+
+    shadowColor: '#000000',
+    shadowOpacity: 0.35,
+    shadowRadius: 28,
+
+    elevation: 0,
+  },
+
+  statAmbientGlowSecondary: {
+    position: 'absolute',
+
+    width: 92,
+    height: 92,
+
+    borderRadius: 46,
+
+    bottom: -42,
+    left: -28,
+
+    shadowColor: '#000000',
+    shadowOpacity: 0.24,
+    shadowRadius: 22,
+
+    elevation: 0,
+  },
+
+  categoryMotionLayer: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    overflow: 'hidden',
+  },
+
+  vehicleRouteSvg: {
+    position: 'absolute',
+    right: 6,
+    bottom: 8,
+  },
+
+  vehicleMotionDot: {
+    position: 'absolute',
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+    right: 10,
+    bottom: 32,
+  },
+
+  vehicleDataStream: {
+    position: 'absolute',
+    width: 96,
+    height: 1,
+    top: 18,
+    right: -24,
+  },
+
+  driverEcgSvg: {
+    position: 'absolute',
+    right: 5,
+    bottom: 16,
+  },
+
+  driverBreathingRing: {
+    position: 'absolute',
+    width: 54,
+    height: 54,
+    left: 3,
+    top: 5,
+    borderRadius: 27,
+    borderWidth: 1.5,
+  },
+
+  tripConstellationSvg: {
+    position: 'absolute',
+    right: 3,
+    top: 4,
+  },
+
+  tripParticle: {
+    position: 'absolute',
+    width: 3,
+    height: 3,
+    borderRadius: 2,
+    marginLeft: -1.5,
+    marginTop: -1.5,
+  },
+
+  tripOrbitDot: {
+    position: 'absolute',
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+    left: 21,
+    top: 22,
+  },
+
+  maintenanceBorderSvg: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+  },
+
+  statCardContent: {
+    flex: 1,
+    justifyContent: 'space-between',
+    zIndex: 2,
+  },
+
+  statCardPressed: {
+    opacity: 0.9,
   },
 
   statIcon: {

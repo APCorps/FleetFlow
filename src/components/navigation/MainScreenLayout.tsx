@@ -16,7 +16,7 @@ import {
   useNavigation,
 } from '@react-navigation/native';
 
-import {
+import type {
   NativeStackNavigationProp,
 } from '@react-navigation/native-stack';
 
@@ -24,7 +24,7 @@ import FloatingBottomNav, {
   BottomNavRoute,
 } from '../FloatingBottomNav/FloatingBottomNav';
 
-import {
+import type {
   RootStackParamList,
 } from '../../navigation/AppNavigator';
 
@@ -48,9 +48,8 @@ const TAB_ROUTES: BottomNavRoute[] = [
 ];
 
 const MainScreenLayout = () => {
-  const {
-    width,
-  } = useWindowDimensions();
+  const {width} =
+    useWindowDimensions();
 
   const navigation =
     useNavigation<NavigationProp>();
@@ -71,6 +70,12 @@ const MainScreenLayout = () => {
     useRef(
       new Animated.Value(0),
     ).current;
+
+  /*
+   * ─────────────────────────────────────
+   * TAB TRANSITION
+   * ─────────────────────────────────────
+   */
 
   useEffect(() => {
     Animated.timing(
@@ -95,6 +100,12 @@ const MainScreenLayout = () => {
     contentTranslateX,
   ]);
 
+  /*
+   * ─────────────────────────────────────
+   * BOTTOM NAVIGATION
+   * ─────────────────────────────────────
+   */
+
   const handleNavigate = (
     route: BottomNavRoute,
   ) => {
@@ -107,6 +118,37 @@ const MainScreenLayout = () => {
     setActiveRoute(route);
   };
 
+  /*
+   * ─────────────────────────────────────
+   * DASHBOARD CARD NAVIGATION
+   * ─────────────────────────────────────
+   *
+   * Vehicles / Drivers / Trips:
+   * switch the local tab.
+   *
+   * Maintenance:
+   * remains a normal stack screen.
+   * ─────────────────────────────────────
+   */
+
+  const handleDashboardNavigation = (
+    route:
+      | BottomNavRoute
+      | 'Maintenance',
+  ) => {
+    if (
+      route === 'Maintenance'
+    ) {
+      navigation.navigate(
+        'Maintenance',
+      );
+
+      return;
+    }
+
+    handleNavigate(route);
+  };
+
   return (
     <View
       style={styles.container}>
@@ -116,15 +158,15 @@ const MainScreenLayout = () => {
        * CONTENT VIEWPORT
        * ─────────────────────────────
        *
-       * Only this area clips and
-       * animates horizontally.
-       *
-       * The bottom navigation is NOT
-       * inside this view.
+       * The viewport stays fixed.
+       * Only contentTrack receives
+       * translateX.
        */}
 
       <View
-        style={styles.contentViewport}>
+        style={
+          styles.contentViewport
+        }>
 
         <Animated.View
           style={[
@@ -153,7 +195,11 @@ const MainScreenLayout = () => {
               },
             ]}>
 
-            <DashboardScreen />
+            <DashboardScreen
+              onNavigate={
+                handleDashboardNavigation
+              }
+            />
 
           </View>
 
@@ -224,20 +270,21 @@ const MainScreenLayout = () => {
        *
        * IMPORTANT:
        *
-       * This is a sibling of the
-       * Animated.View above.
+       * This is deliberately OUTSIDE
+       * contentTrack.
        *
-       * It does NOT receive the
-       * content track transform.
-       *
-       * Therefore the entire nav
-       * remains pixel-stable while
-       * pages slide underneath it.
+       * It receives no translateX,
+       * scale, opacity, or transition
+       * from the page track.
        */}
 
       <FloatingBottomNav
-        activeRoute={activeRoute}
-        onNavigate={handleNavigate}
+        activeRoute={
+          activeRoute
+        }
+        onNavigate={
+          handleNavigate
+        }
       />
 
     </View>
@@ -245,24 +292,42 @@ const MainScreenLayout = () => {
 };
 
 const styles = StyleSheet.create({
+
   container: {
     flex: 1,
+
     backgroundColor:
       '#020817',
   },
 
+  /*
+   * Fixed window through which
+   * the horizontal track moves.
+   */
+
   contentViewport: {
     flex: 1,
+
     overflow: 'hidden',
   },
 
+  /*
+   * ONLY THIS ELEMENT MOVES.
+   */
+
   contentTrack: {
     flex: 1,
+
     flexDirection: 'row',
+
+    willChange:
+      'transform',
   },
 
   page: {
     flex: 1,
+
+    minWidth: 0,
   },
 });
 
