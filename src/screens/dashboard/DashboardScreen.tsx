@@ -5,6 +5,7 @@ import {
   Animated,
   Easing,
   GestureResponderEvent,
+  Image,
   Modal,
   Pressable,
   StyleSheet,
@@ -19,12 +20,16 @@ import {
 import MaterialDesignIcons from
   '@react-native-vector-icons/material-design-icons';
 
-import Svg, {
-  Circle,
-  Path,
-  Polyline,
-  Rect,
-} from 'react-native-svg';
+import {
+  launchCamera,
+  launchImageLibrary,
+} from 'react-native-image-picker';
+
+import type {
+  Asset,
+  CameraOptions,
+  ImageLibraryOptions,
+} from 'react-native-image-picker';
 
 import {
   useAccounts,
@@ -103,40 +108,6 @@ const FINANCIAL_COLORS = {
  * ─────────────────────────────────────
  */
 
-/*
- * ─────────────────────────────────────
- * FLEET STAT CARD
- * ─────────────────────────────────────
- *
- * Each card has its own ambient motion:
- *
- * Vehicles:
- *   route path + moving vehicle dot +
- *   diagonal data streams.
- *
- * Drivers:
- *   ECG pulse + breathing ring.
- *
- * Trips:
- *   constellation particles +
- *   orbital navigation dot.
- *
- * Maintenance:
- *   kinetic border segment.
- */
-
-type FleetCardCategory =
-  | 'vehicles'
-  | 'drivers'
-  | 'trips'
-  | 'maintenance';
-
-const AnimatedSvgPath =
-  Animated.createAnimatedComponent(Path);
-
-const AnimatedSvgRect =
-  Animated.createAnimatedComponent(Rect);
-
 const StatCard = ({
   icon,
   color,
@@ -145,7 +116,6 @@ const StatCard = ({
   subtitle,
   subtitleColor,
   cardBackground,
-  category,
   onPress,
   entranceDelay,
   reduceMotion,
@@ -157,17 +127,10 @@ const StatCard = ({
   subtitle: string;
   subtitleColor: string;
   cardBackground: string;
-  category: FleetCardCategory;
   onPress: () => void;
   entranceDelay: number;
   reduceMotion: boolean;
 }) => {
-  /*
-   * ─────────────────────────────────────
-   * ENTRANCE
-   * ─────────────────────────────────────
-   */
-
   const entranceOpacity = useRef(
     new Animated.Value(0),
   ).current;
@@ -175,19 +138,6 @@ const StatCard = ({
   const entranceTranslateY = useRef(
     new Animated.Value(18),
   ).current;
-
-  /*
-   * ─────────────────────────────────────
-   * INTERACTION
-   * ─────────────────────────────────────
-   *
-   * These values stay JS-driven for the
-   * entire lifetime of the card because
-   * touch-position updates use setValue().
-   * React Native does not allow the same
-   * Animated.Value to switch between the
-   * native and JS animation drivers.
-   */
 
   const interactionScale = useRef(
     new Animated.Value(1),
@@ -201,6 +151,18 @@ const StatCard = ({
     new Animated.Value(0),
   ).current;
 
+  const glowProgress = useRef(
+    new Animated.Value(0),
+  ).current;
+
+  const glowOpacity = useRef(
+    new Animated.Value(1),
+  ).current;
+
+  const glowAnimation = useRef<Animated.CompositeAnimation | null>(
+    null,
+  );
+
   const touchFrame = useRef<number | null>(
     null,
   );
@@ -210,92 +172,45 @@ const StatCard = ({
     height: 1,
   }).current;
 
-  /*
-   * ─────────────────────────────────────
-   * CATEGORY MOTION
-   * ─────────────────────────────────────
-   */
-
-  const categoryProgress = useRef(
-    new Animated.Value(0),
-  ).current;
-
-  const categoryAnimation =
-    useRef<Animated.CompositeAnimation | null>(
-      null,
-    );
-
-  /*
-   * Decorative motion opacity.
-   *
-   * It is subdued during a press so the
-   * tactile feedback remains dominant.
-   */
-
-  const ambientOpacity = useRef(
-    new Animated.Value(1),
-  ).current;
-
-  /*
-   * ─────────────────────────────────────
-   * ENTRANCE ANIMATION
-   * ─────────────────────────────────────
-   */
-
   useEffect(() => {
     entranceOpacity.stopAnimation();
     entranceTranslateY.stopAnimation();
 
     entranceOpacity.setValue(0);
-
     entranceTranslateY.setValue(
       reduceMotion ? 0 : 18,
     );
 
-    const entrance =
-      Animated.sequence([
+    const entrance = Animated.sequence([
+      ...(reduceMotion
+        ? []
+        : [
+            Animated.delay(entranceDelay),
+          ]),
+      Animated.parallel([
+        Animated.timing(entranceOpacity, {
+          toValue: 1,
+          duration: reduceMotion ? 180 : 260,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
         ...(reduceMotion
           ? []
           : [
-              Animated.delay(
-                entranceDelay,
+              Animated.timing(
+                entranceTranslateY,
+                {
+                  toValue: 0,
+                  duration: 280,
+                  easing: Easing.out(
+                    Easing.cubic,
+                  ),
+                  useNativeDriver: true,
+                },
               ),
             ]),
-
-        Animated.parallel([
-          Animated.timing(
-            entranceOpacity,
-            {
-              toValue: 1,
-              duration: reduceMotion
-                ? 180
-                : 260,
-              easing:
-                Easing.out(
-                  Easing.quad,
-                ),
-              useNativeDriver: true,
-            },
-          ),
-
-          ...(reduceMotion
-            ? []
-            : [
-                Animated.timing(
-                  entranceTranslateY,
-                  {
-                    toValue: 0,
-                    duration: 280,
-                    easing:
-                      Easing.out(
-                        Easing.cubic,
-                      ),
-                    useNativeDriver: true,
-                  },
-                ),
-              ]),
-        ]),
-      ]);
+      ]),
+    ]);
 
     entrance.start();
 
@@ -309,119 +224,101 @@ const StatCard = ({
     entranceTranslateY,
   ]);
 
-  /*
-   * ─────────────────────────────────────
-   * CATEGORY AMBIENT LOOP
-   * ─────────────────────────────────────
-   *
-   * Uses a single JS-driven progress value.
-   * This value feeds the category-specific
-   * SVG dash/path motion. The native-driven
-   * entrance and popup animations use their
-   * own Animated.Values and never share the
-   * category progress node.
-   */
-
   useEffect(() => {
-    categoryAnimation.current?.stop();
+    glowAnimation.current?.stop();
 
-    categoryProgress.stopAnimation();
-    categoryProgress.setValue(0);
+    glowProgress.stopAnimation();
+    glowOpacity.stopAnimation();
+
+    glowProgress.setValue(0);
+    glowOpacity.setValue(1);
 
     if (reduceMotion) {
       return () => {
-        categoryAnimation.current?.stop();
+        glowAnimation.current?.stop();
       };
     }
 
-    const duration =
-      category === 'vehicles'
-        ? 3200
-        : category === 'drivers'
-        ? 3000
-        : category === 'trips'
-        ? 3500
-        : 3800;
-
     const loop = Animated.loop(
-      Animated.timing(
-        categoryProgress,
-        {
-          toValue: 1,
-          duration,
-          easing:
-            Easing.inOut(Easing.sin),
-          useNativeDriver: false,
-        },
-      ),
+      Animated.timing(glowProgress, {
+        toValue: 1,
+        duration: 6000,
+        easing: Easing.inOut(Easing.sin),
+        useNativeDriver: true,
+      }),
     );
 
-    categoryAnimation.current = loop;
+    glowAnimation.current = loop;
     loop.start();
 
     return () => {
       loop.stop();
-      if (
-        categoryAnimation.current === loop
-      ) {
-        categoryAnimation.current = null;
-      }
     };
   }, [
-    category,
     reduceMotion,
-    categoryProgress,
-    categoryAnimation,
+    glowProgress,
+    glowOpacity,
   ]);
 
-  /*
-   * ─────────────────────────────────────
-   * INTERACTION / PRESS
-   * ─────────────────────────────────────
-   */
+  useEffect(() => {
+    return () => {
+      if (touchFrame.current !== null) {
+        cancelAnimationFrame(
+          touchFrame.current,
+        );
+      }
+    };
+  }, []);
 
-  const handleTouchStart = () => {
-    const animations: Animated.CompositeAnimation[] =
-      [
-        Animated.timing(
-          interactionScale,
-          {
-            toValue: 0.97,
-            duration: 100,
-            easing:
-              Easing.out(
-                Easing.quad,
-              ),
-            useNativeDriver: false,
-          },
-        ),
-        Animated.timing(
-          ambientOpacity,
-          {
-            toValue:
-              reduceMotion
-                ? 1
-                : 0.18,
-            duration: 100,
-            easing:
-              Easing.out(
-                Easing.quad,
-              ),
-            useNativeDriver: false,
-          },
-        ),
-      ];
+  const resetTilt = () => {
+    if (touchFrame.current !== null) {
+      cancelAnimationFrame(
+        touchFrame.current,
+      );
+      touchFrame.current = null;
+    }
 
-    Animated.parallel(
-      animations,
-    ).start();
+    Animated.parallel([
+      Animated.spring(rotateX, {
+        toValue: 0,
+        damping: 16,
+        stiffness: 180,
+        mass: 0.7,
+        useNativeDriver: true,
+      }),
+      Animated.spring(rotateY, {
+        toValue: 0,
+        damping: 16,
+        stiffness: 180,
+        mass: 0.7,
+        useNativeDriver: true,
+      }),
+    ]).start();
   };
 
-  /*
-   * ─────────────────────────────────────
-   * TILT
-   * ─────────────────────────────────────
-   */
+  const handleTouchStart = () => {
+    const animations: Animated.CompositeAnimation[] = [
+      Animated.timing(interactionScale, {
+        toValue: 0.97,
+        duration: 100,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+    ];
+
+    if (!reduceMotion) {
+      animations.push(
+        Animated.timing(glowOpacity, {
+          toValue: 0.32,
+          duration: 100,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
+      );
+    }
+
+    Animated.parallel(animations).start();
+  };
 
   const handleTouchMove = (
     event: GestureResponderEvent,
@@ -445,37 +342,35 @@ const StatCard = ({
 
         const normalizedX =
           cardSize.width > 1
-            ? (locationX /
-                cardSize.width) *
+            ? (locationX / cardSize.width) *
                 2 -
               1
             : 0;
 
         const normalizedY =
           cardSize.height > 1
-            ? (locationY /
-                cardSize.height) *
+            ? (locationY / cardSize.height) *
                 2 -
               1
             : 0;
 
-        const clampedX =
-          Math.max(
-            -1,
-            Math.min(
-              1,
-              normalizedX,
-            ),
-          );
+        const clampedX = Math.max(
+          -1,
+          Math.min(1, normalizedX),
+        );
 
-        const clampedY =
-          Math.max(
-            -1,
-            Math.min(
-              1,
-              normalizedY,
-            ),
-          );
+        const clampedY = Math.max(
+          -1,
+          Math.min(1, normalizedY),
+        );
+
+        /*
+         * Touching the left side rotates the
+         * card toward the left, while touching
+         * the right side rotates it toward the
+         * right. Vertical movement controls the
+         * X axis tilt.
+         */
 
         rotateY.setValue(
           clampedX * 9,
@@ -491,300 +386,68 @@ const StatCard = ({
       });
   };
 
-  const resetTilt = () => {
-    if (
-      touchFrame.current !==
-      null
-    ) {
-      cancelAnimationFrame(
-        touchFrame.current,
-      );
-
-      touchFrame.current = null;
-    }
-
-    if (reduceMotion) {
-      rotateX.setValue(0);
-      rotateY.setValue(0);
-      return;
-    }
-
-    Animated.parallel([
-      Animated.spring(
-        rotateX,
-        {
-          toValue: 0,
-          damping: 16,
-          stiffness: 180,
-          mass: 0.7,
-          useNativeDriver: false,
-        },
-      ),
-
-      Animated.spring(
-        rotateY,
-        {
-          toValue: 0,
-          damping: 16,
-          stiffness: 180,
-          mass: 0.7,
-          useNativeDriver: false,
-        },
-      ),
-    ]).start();
-  };
-
   const handleTouchEnd = () => {
     Animated.parallel([
-      Animated.spring(
-        interactionScale,
-        {
-          toValue: 1,
-          damping: 14,
-          stiffness: 220,
-          mass: 0.65,
-          useNativeDriver: false,
-        },
-      ),
-
-      Animated.timing(
-        ambientOpacity,
-        {
-          toValue: 1,
-          duration: 180,
-          easing:
-            Easing.out(
-              Easing.quad,
-            ),
-          useNativeDriver: false,
-        },
-      ),
+      Animated.spring(interactionScale, {
+        toValue: 1,
+        damping: 14,
+        stiffness: 220,
+        mass: 0.65,
+        useNativeDriver: true,
+      }),
+      Animated.timing(glowOpacity, {
+        toValue: 1,
+        duration: 180,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
     ]).start();
 
     resetTilt();
   };
 
-  /*
-   * ─────────────────────────────────────
-   * SHARED PROGRESS
-   * ─────────────────────────────────────
-   */
-
-  const p = categoryProgress;
-
-  /*
-   * ─────────────────────────────────────
-   * VEHICLES
-   * ─────────────────────────────────────
-   */
-
-  const vehicleDotX =
-    p.interpolate({
-      inputRange: [
-        0,
-        0.125,
-        0.25,
-        0.375,
-        0.5,
-        0.625,
-        0.75,
-        0.875,
-        1,
-      ],
+  const glowTranslateX =
+    glowProgress.interpolate({
+      inputRange: [0, 0.25, 0.5, 0.75, 1],
       outputRange: [
-        4,
-        11,
+        -18,
+        12,
+        -8,
         18,
-        29,
-        43,
-        56,
-        67,
-        75,
-        4,
+        -18,
       ],
     });
 
-  const vehicleDotY =
-    p.interpolate({
-      inputRange: [
-        0,
-        0.125,
-        0.25,
-        0.375,
-        0.5,
-        0.625,
-        0.75,
-        0.875,
-        1,
-      ],
+  const glowTranslateY =
+    glowProgress.interpolate({
+      inputRange: [0, 0.25, 0.5, 0.75, 1],
       outputRange: [
-        34,
-        30,
-        24,
-        18,
+        10,
+        -6,
         14,
-        16,
-        20,
-        28,
-        34,
+        -4,
+        10,
       ],
     });
 
-  const dataStreamX =
-    p.interpolate({
-      inputRange: [0, 1],
-      outputRange: [-120, 120],
-    });
-
-  /*
-   * ─────────────────────────────────────
-   * DRIVERS
-   * ─────────────────────────────────────
-   */
-
-  const driversDashOffset =
-    p.interpolate({
-      inputRange: [0, 1],
-      outputRange: [80, 0],
-    });
-
-  const breathingScale =
-    p.interpolate({
-      inputRange: [
-        0,
-        0.25,
-        0.5,
-        0.75,
-        1,
-      ],
+  const glowScale =
+    glowProgress.interpolate({
+      inputRange: [0, 0.25, 0.5, 0.75, 1],
       outputRange: [
-        0.92,
+        1,
         1.08,
-        0.92,
-        1.08,
-        0.92,
-      ],
-    });
-
-  const breathingOpacity =
-    p.interpolate({
-      inputRange: [
-        0,
-        0.25,
-        0.5,
-        0.75,
+        0.97,
+        1.10,
         1,
       ],
-      outputRange: [
-        0.22,
-        0.08,
-        0.22,
-        0.08,
-        0.22,
-      ],
     });
-
-  /*
-   * ─────────────────────────────────────
-   * TRIPS
-   * ─────────────────────────────────────
-   */
-
-  const tripOrbitX =
-    p.interpolate({
-      inputRange: [
-        0,
-        0.25,
-        0.5,
-        0.75,
-        1,
-      ],
-      outputRange: [
-        0,
-        13,
-        0,
-        -13,
-        0,
-      ],
-    });
-
-  const tripOrbitY =
-    p.interpolate({
-      inputRange: [
-        0,
-        0.25,
-        0.5,
-        0.75,
-        1,
-      ],
-      outputRange: [
-        -9,
-        0,
-        9,
-        0,
-        -9,
-      ],
-    });
-
-  const constellationPulse =
-    p.interpolate({
-      inputRange: [
-        0,
-        0.2,
-        0.4,
-        0.6,
-        0.8,
-        1,
-      ],
-      outputRange: [
-        0.34,
-        0.58,
-        0.30,
-        0.62,
-        0.30,
-        0.34,
-      ],
-    });
-
-  const constellationScale =
-    p.interpolate({
-      inputRange: [
-        0,
-        0.5,
-        1,
-      ],
-      outputRange: [
-        0.94,
-        1.06,
-        0.94,
-      ],
-    });
-
-  /*
-   * ─────────────────────────────────────
-   * MAINTENANCE
-   * ─────────────────────────────────────
-   */
-
-  const maintenanceDashOffset =
-    p.interpolate({
-      inputRange: [0, 1],
-      outputRange: [400, 0],
-    });
-
-  /*
-   * ─────────────────────────────────────
-   * CARD
-   * ─────────────────────────────────────
-   */
 
   return (
     <Animated.View
       style={[
         styles.statCard,
         {
-          opacity:
-            entranceOpacity,
+          opacity: entranceOpacity,
           transform: [
             {
               perspective: 1000,
@@ -794,41 +457,30 @@ const StatCard = ({
                 entranceTranslateY,
             },
             {
-              scale:
-                interactionScale,
+              scale: interactionScale,
             },
             ...(reduceMotion
               ? []
               : [
                   {
                     rotateX:
-                      rotateX.interpolate(
-                        {
-                          inputRange: [
-                            -10,
-                            10,
-                          ],
-                          outputRange: [
-                            '-10deg',
-                            '10deg',
-                          ],
-                        },
-                      ),
+                      rotateX.interpolate({
+                        inputRange: [-10, 10],
+                        outputRange: [
+                          '-10deg',
+                          '10deg',
+                        ],
+                      }),
                   },
                   {
                     rotateY:
-                      rotateY.interpolate(
-                        {
-                          inputRange: [
-                            -10,
-                            10,
-                          ],
-                          outputRange: [
-                            '-10deg',
-                            '10deg',
-                          ],
-                        },
-                      ),
+                      rotateY.interpolate({
+                        inputRange: [-10, 10],
+                        outputRange: [
+                          '-10deg',
+                          '10deg',
+                        ],
+                      }),
                   },
                 ]),
           ],
@@ -841,22 +493,13 @@ const StatCard = ({
         accessibilityHint={`View ${title} details`}
         hitSlop={4}
         onPress={onPress}
-        onTouchStart={
-          handleTouchStart
-        }
-        onTouchMove={
-          handleTouchMove
-        }
-        onTouchEnd={
-          handleTouchEnd
-        }
-        onTouchCancel={
-          handleTouchEnd
-        }
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchEnd}
         onLayout={event => {
           cardSize.width =
             event.nativeEvent.layout.width;
-
           cardSize.height =
             event.nativeEvent.layout.height;
         }}
@@ -870,367 +513,71 @@ const StatCard = ({
           },
         ]}>
 
-        {/* CATEGORY DECORATION */}
+        {/* AMBIENT CARD GLOW */}
 
-        <View
+        <Animated.View
           pointerEvents="none"
-          style={
-            styles.categoryMotionLayer
-          }>
-
-          {/* ─────────────────────
-              VEHICLES
-             ───────────────────── */}
-
-          {category ===
-            'vehicles' && (
-            <>
-              <Svg
-                style={
-                  styles.vehicleRouteSvg
-                }
-                width="100%"
-                height="52"
-                viewBox="0 0 84 52">
-
-                <Path
-                  d="M4 36 C18 12, 29 42, 43 23 C55 7, 67 17, 80 8"
-                  fill="none"
-                  stroke={color}
-                  strokeWidth="1.5"
-                  strokeOpacity={0.30}
-                  strokeDasharray="3 5"
-                  strokeLinecap="round"
-                />
-
-                <AnimatedSvgPath
-                  d="M4 36 C18 12, 29 42, 43 23 C55 7, 67 17, 80 8"
-                  fill="none"
-                  stroke={color}
-                  strokeWidth="1.9"
-                  strokeOpacity={
-                    Animated.multiply(
-                      ambientOpacity,
-                      0.50,
-                    )
-                  }
-                  strokeDasharray="1 14"
-                  strokeDashoffset={p}
-                />
-
-              </Svg>
-
-              <Animated.View
-                style={[
-                  styles.vehicleMotionDot,
-                  {
-                    backgroundColor:
-                      color,
-                    opacity:
-                      Animated.multiply(
-                        ambientOpacity,
-                        0.68,
-                      ),
-                    transform: [
-                      {
-                        translateX:
-                          vehicleDotX,
-                      },
-                      {
-                        translateY:
-                          vehicleDotY,
-                      },
-                    ],
-                  },
-                ]}
-              />
-
-              {[0, 1, 2].map(
-                stream => (
-                  <Animated.View
-                    key={`vehicle-stream-${stream}`}
-                    style={[
-                      styles.vehicleDataStream,
-                      {
-                        backgroundColor:
-                          color,
-                        opacity:
-                          Animated.multiply(
-                            ambientOpacity,
-                            0.10 +
-                              stream *
-                                0.02,
-                          ),
-                        transform: [
-                          {
-                            translateX:
-                              Animated.add(
-                                dataStreamX,
-                                stream *
-                                  42,
-                              ),
-                          },
-                          {
-                            rotate:
-                              '-25deg',
-                          },
-                        ],
-                      },
-                    ]}
-                  />
-                ),
-              )}
-            </>
-          )}
-
-          {/* ─────────────────────
-              DRIVERS
-             ───────────────────── */}
-
-          {category ===
-            'drivers' && (
-            <>
-              <Svg
-                style={
-                  styles.driverEcgSvg
-                }
-                width="100%"
-                height="42"
-                viewBox="0 0 120 42">
-
-                <Path
-                  d="M2 23 H25 L31 23 L36 8 L42 31 L48 18 L54 23 H82 L87 23 L93 12 L99 28 L105 22 H118"
-                  fill="none"
-                  stroke={color}
-                  strokeWidth="1.5"
-                  strokeOpacity={0.32}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeDasharray="8 5"
-                />
-
-                <AnimatedSvgPath
-                  d="M2 23 H25 L31 23 L36 8 L42 31 L48 18 L54 23 H82 L87 23 L93 12 L99 28 L105 22 H118"
-                  fill="none"
-                  stroke={color}
-                  strokeWidth="2.0"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeDasharray="18 62"
-                  strokeDashoffset={
-                    driversDashOffset
-                  }
-                  strokeOpacity={
-                    Animated.multiply(
-                      ambientOpacity,
-                      0.68,
-                    )
-                  }
-                />
-
-              </Svg>
-
-              <Animated.View
-                pointerEvents="none"
-                style={[
-                  styles.driverBreathingRing,
-                  {
-                    borderColor:
-                      color,
-                    opacity:
-                      Animated.multiply(
-                        ambientOpacity,
-                        breathingOpacity,
-                      ),
-                    transform: [
-                      {
-                        scale:
-                          breathingScale,
-                      },
-                    ],
-                  },
-                ]}
-              />
-            </>
-          )}
-
-          {/* ─────────────────────
-              TRIPS
-             ───────────────────── */}
-
-          {category ===
-            'trips' && (
-            <>
-              <Svg
-                style={
-                  styles.tripConstellationSvg
-                }
-                width="100%"
-                height="62"
-                viewBox="0 0 120 62">
-
-                <Path
-                  d="M9 17 L37 8 L61 23 L91 11 L111 29 M37 8 L52 48 L91 11 L77 54 L111 29 M9 17 L52 48"
-                  fill="none"
-                  stroke={color}
-                  strokeWidth="0.8"
-                  strokeOpacity={0.28}
-                />
-
-              </Svg>
-
-              {[
+          style={[
+            styles.statAmbientGlow,
+            {
+              backgroundColor: color,
+              shadowColor: color,
+              opacity: Animated.multiply(
+                glowOpacity,
+                0.16,
+              ),
+              transform: [
                 {
-                  x: 12,
-                  y: 18,
-                  delay: 0,
+                  translateX:
+                    glowTranslateX,
                 },
                 {
-                  x: 40,
-                  y: 9,
-                  delay: 0.12,
+                  translateY:
+                    glowTranslateY,
                 },
                 {
-                  x: 64,
-                  y: 24,
-                  delay: 0.24,
+                  scale: glowScale,
+                },
+              ],
+            },
+          ]}
+        />
+
+        {/* SECONDARY SOFT GLOW */}
+
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.statAmbientGlowSecondary,
+            {
+              backgroundColor: color,
+              shadowColor: color,
+              opacity: Animated.multiply(
+                glowOpacity,
+                0.07,
+              ),
+              transform: [
+                {
+                  translateX:
+                    glowTranslateY,
                 },
                 {
-                  x: 93,
-                  y: 12,
-                  delay: 0.36,
+                  translateY:
+                    glowTranslateX,
                 },
                 {
-                  x: 78,
-                  y: 54,
-                  delay: 0.48,
+                  scale: glowScale,
                 },
-                {
-                  x: 110,
-                  y: 30,
-                  delay: 0.60,
-                },
-              ].map(
-                particle => (
-                  <Animated.View
-                    key={`${particle.x}-${particle.y}`}
-                    pointerEvents="none"
-                    style={[
-                      styles.tripParticle,
-                      {
-                        left:
-                          `${particle.x}%`,
-                        top:
-                          particle.y,
-                        backgroundColor:
-                          color,
-                        opacity:
-                          Animated.multiply(
-                            ambientOpacity,
-                            constellationPulse,
-                          ),
-                        transform: [
-                          {
-                            scale:
-                              constellationScale,
-                          },
-                        ],
-                      },
-                    ]}
-                  />
-                ),
-              )}
-
-              <Animated.View
-                pointerEvents="none"
-                style={[
-                  styles.tripOrbitDot,
-                  {
-                    backgroundColor:
-                      color,
-                    opacity:
-                      Animated.multiply(
-                        ambientOpacity,
-                        0.72,
-                      ),
-                    transform: [
-                      {
-                        translateX:
-                          tripOrbitX,
-                      },
-                      {
-                        translateY:
-                          tripOrbitY,
-                      },
-                    ],
-                  },
-                ]}
-              />
-            </>
-          )}
-
-          {/* ─────────────────────
-              MAINTENANCE
-             ───────────────────── */}
-
-          {category ===
-            'maintenance' && (
-            <Svg
-              pointerEvents="none"
-              style={
-                styles.maintenanceBorderSvg
-              }
-              width="100%"
-              height="100%"
-              viewBox="0 0 100 100"
-              preserveAspectRatio="none">
-
-              <Rect
-                x="1"
-                y="1"
-                width="98"
-                height="98"
-                rx="15"
-                fill="none"
-                stroke={color}
-                strokeWidth="1.2"
-                strokeOpacity={0.14}
-              />
-
-              <AnimatedSvgRect
-                x="1"
-                y="1"
-                width="98"
-                height="98"
-                rx="15"
-                fill="none"
-                stroke={color}
-                strokeWidth="2.2"
-                strokeLinecap="round"
-                strokeDasharray="16 384"
-                strokeDashoffset={
-                  maintenanceDashOffset
-                }
-                strokeOpacity={
-                  Animated.multiply(
-                    ambientOpacity,
-                    0.70,
-                  )
-                }
-              />
-
-            </Svg>
-          )}
-
-        </View>
+              ],
+            },
+          ]}
+        />
 
         {/* CONTENT */}
 
         <View
           pointerEvents="none"
-          style={
-            styles.statCardContent
-          }>
+          style={styles.statCardContent}>
 
           <View
             style={[
@@ -1258,9 +605,7 @@ const StatCard = ({
           </Text>
 
           <View
-            style={
-              styles.statBottomRow
-            }>
+            style={styles.statBottomRow}>
 
             <Text
               style={styles.statValue}>
@@ -1268,9 +613,7 @@ const StatCard = ({
             </Text>
 
             <View
-              style={
-                styles.statStatusRow
-              }>
+              style={styles.statStatusRow}>
 
               <View
                 style={[
@@ -1445,6 +788,26 @@ const DashboardScreen = ({
     setProfilePopupMounted,
   ] = useState(false);
 
+  const [
+    documentCaptureVisible,
+    setDocumentCaptureVisible,
+  ] = useState(false);
+
+  const [
+    stagedDocuments,
+    setStagedDocuments,
+  ] = useState<Asset[]>([]);
+
+  const [
+    documentError,
+    setDocumentError,
+  ] = useState('');
+
+  const [
+    isPickingDocument,
+    setIsPickingDocument,
+  ] = useState(false);
+
   const profilePopupOpacity = useRef(
     new Animated.Value(0),
   ).current;
@@ -1587,6 +950,181 @@ const DashboardScreen = ({
     ).toLocaleString(
       'en-IN',
     )}`;
+  };
+
+  /*
+   * ─────────────────────────────────────
+   * DOCUMENT CAPTURE
+   * ─────────────────────────────────────
+   */
+
+  const openDocumentCapture = () => {
+    setDocumentError('');
+    setDocumentCaptureVisible(true);
+  };
+
+  const appendDocumentAssets = (assets: Asset[]) => {
+    const validAssets = assets.filter(
+      asset => Boolean(asset.uri),
+    );
+
+    if (validAssets.length === 0) {
+      return;
+    }
+
+    setStagedDocuments(current => {
+      const existingUris = new Set(
+        current
+          .map(asset => asset.uri)
+          .filter((uri): uri is string => Boolean(uri)),
+      );
+
+      const next = [...current];
+
+      validAssets.forEach(asset => {
+        if (asset.uri && !existingUris.has(asset.uri)) {
+          next.push(asset);
+          existingUris.add(asset.uri);
+        }
+      });
+
+      return next.slice(0, 10);
+    });
+  };
+
+  const handleTakeDocumentPhoto = async () => {
+    if (isPickingDocument) {
+      return;
+    }
+
+    setDocumentError('');
+    setIsPickingDocument(true);
+
+    const options: CameraOptions = {
+      mediaType: 'photo',
+      cameraType: 'back',
+      quality: 0.85,
+      saveToPhotos: false,
+    };
+
+    try {
+      const response = await launchCamera(options);
+
+      if (response.didCancel) {
+        return;
+      }
+
+      if (response.errorCode) {
+        setDocumentError(
+          response.errorMessage ||
+            'The camera could not be opened.',
+        );
+        return;
+      }
+
+      appendDocumentAssets(response.assets || []);
+    } catch (error) {
+      console.error(
+        'Document camera failed:',
+        error,
+      );
+      setDocumentError(
+        'The camera could not be opened. Please try again.',
+      );
+    } finally {
+      setIsPickingDocument(false);
+    }
+  };
+
+  const handleChooseDocumentFromGallery = async () => {
+    if (isPickingDocument) {
+      return;
+    }
+
+    setDocumentError('');
+    setIsPickingDocument(true);
+
+    const options: ImageLibraryOptions = {
+      mediaType: 'photo',
+      selectionLimit: 10,
+      quality: 0.85,
+    };
+
+    try {
+      const response = await launchImageLibrary(options);
+
+      if (response.didCancel) {
+        return;
+      }
+
+      if (response.errorCode) {
+        setDocumentError(
+          response.errorMessage ||
+            'The gallery could not be opened.',
+        );
+        return;
+      }
+
+      appendDocumentAssets(response.assets || []);
+    } catch (error) {
+      console.error(
+        'Document gallery failed:',
+        error,
+      );
+      setDocumentError(
+        'The gallery could not be opened. Please try again.',
+      );
+    } finally {
+      setIsPickingDocument(false);
+    }
+  };
+
+  const removeStagedDocument = (uri: string | undefined) => {
+    if (!uri) {
+      return;
+    }
+
+    setStagedDocuments(current =>
+      current.filter(asset => asset.uri !== uri),
+    );
+  };
+
+  const closeDocumentCapture = () => {
+    if (isPickingDocument) {
+      return;
+    }
+
+    setDocumentCaptureVisible(false);
+    setDocumentError('');
+  };
+
+  const getDocumentFileName = (asset: Asset) => {
+    if (asset.fileName) {
+      return asset.fileName;
+    }
+
+    if (asset.uri) {
+      const parts = asset.uri.split('/');
+      return parts[parts.length - 1] || 'Fleet document';
+    }
+
+    return 'Fleet document';
+  };
+
+  const formatDocumentSize = (bytes?: number) => {
+    if (!bytes || bytes <= 0) {
+      return 'Size unavailable';
+    }
+
+    if (bytes < 1024) {
+      return `${bytes} B`;
+    }
+
+    if (bytes < 1024 * 1024) {
+      return `${(bytes / 1024).toFixed(1)} KB`;
+    }
+
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
   /*
@@ -1768,43 +1306,98 @@ const DashboardScreen = ({
 
           </View>
 
-          {/* PROFILE */}
+          {/* HEADER ACTIONS */}
 
           <View
             style={
-              styles.profileContainer
+              styles.headerActions
             }>
 
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Open profile menu"
-              accessibilityState={{
-                expanded:
-                  profileMenuVisible,
-              }}
-              hitSlop={8}
-              onPress={openProfileMenu}
-              style={({pressed}) => [
-                styles.profileButton,
-                pressed &&
-                  styles.profilePressed,
-              ]}>
+            {/* DOCUMENT CAMERA */}
 
-              <Text
-                style={
-                  styles.profileInitial
-                }>
-                {user?.email
-                  ?.charAt(0)
-                  .toUpperCase() ||
-                  'P'}
-              </Text>
+            <View
+              style={
+                styles.documentActionContainer
+              }>
 
-              <View
-                style={styles.onlineDot}
-              />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Capture fleet document"
+                accessibilityHint="Take a photo or choose documents such as bills and receipts"
+                hitSlop={8}
+                onPress={openDocumentCapture}
+                style={({pressed}) => [
+                  styles.documentButton,
+                  pressed &&
+                    styles.documentPressed,
+                ]}>
 
-            </Pressable>
+                <MaterialDesignIcons
+                  name="camera-outline"
+                  size={21}
+                  color="#60A5FA"
+                />
+
+              </Pressable>
+
+              {stagedDocuments.length > 0 && (
+                <View
+                  pointerEvents="none"
+                  style={
+                    styles.documentCountBadge
+                  }>
+                  <Text
+                    style={
+                      styles.documentCountText
+                    }>
+                    {stagedDocuments.length > 9
+                      ? '9+'
+                      : stagedDocuments.length}
+                  </Text>
+                </View>
+              )}
+
+            </View>
+
+            {/* PROFILE */}
+
+            <View
+              style={
+                styles.profileContainer
+              }>
+
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Open profile menu"
+                accessibilityState={{
+                  expanded:
+                    profileMenuVisible,
+                }}
+                hitSlop={8}
+                onPress={openProfileMenu}
+                style={({pressed}) => [
+                  styles.profileButton,
+                  pressed &&
+                    styles.profilePressed,
+                ]}>
+
+                <Text
+                  style={
+                    styles.profileInitial
+                  }>
+                  {user?.email
+                    ?.charAt(0)
+                    .toUpperCase() ||
+                    'P'}
+                </Text>
+
+                <View
+                  style={styles.onlineDot}
+                />
+
+              </Pressable>
+
+            </View>
 
           </View>
 
@@ -1842,6 +1435,14 @@ const DashboardScreen = ({
             FLEET OVERVIEW
           </Text>
 
+          <Text
+            style={
+              styles.sectionSubtitle
+            }>
+            Monitor your fleet's
+            current operational status
+          </Text>
+
         </View>
 
         {/* 2 × 2 CARD GRID */}
@@ -1857,7 +1458,6 @@ const DashboardScreen = ({
             cardBackground={
               FLEET_CARD_SURFACES.vehicles
             }
-            category="vehicles" 
             title="Total Vehicles"
             value={totalVehicles}
             subtitle={`${activeVehicles} Active`}
@@ -1879,7 +1479,6 @@ const DashboardScreen = ({
             cardBackground={
               FLEET_CARD_SURFACES.drivers
             }
-            category="drivers" 
             title="Total Drivers"
             value={totalDrivers}
             subtitle={`${activeDrivers} Active`}
@@ -1901,7 +1500,6 @@ const DashboardScreen = ({
             cardBackground={
               FLEET_CARD_SURFACES.trips
             }
-            category="trips" 
             title="Total Trips"
             value={totalTrips}
             subtitle={`${inProgressTrips} In Progress`}
@@ -1923,7 +1521,6 @@ const DashboardScreen = ({
             cardBackground={
               FLEET_CARD_SURFACES.maintenance
             }
-            category="maintenance" 
             title="Maintenance"
             value={
               maintenanceVehicles
@@ -2311,6 +1908,359 @@ const DashboardScreen = ({
 
       </View>
 
+      {/* DOCUMENT CAPTURE MODAL */}
+
+      <Modal
+        visible={documentCaptureVisible}
+        transparent
+        animationType="slide"
+        statusBarTranslucent
+        onRequestClose={closeDocumentCapture}>
+
+        <View
+          style={
+            styles.documentModalContainer
+          }>
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Close document capture"
+            onPress={closeDocumentCapture}
+            style={
+              styles.documentModalBackdrop
+            }
+          />
+
+          <View
+            style={
+              styles.documentModalSheet
+            }>
+
+            <View
+              style={
+                styles.documentSheetHandle
+              }
+            />
+
+            <View
+              style={
+                styles.documentSheetHeader
+              }>
+
+              <View
+                style={
+                  styles.documentSheetIcon
+                }>
+                <MaterialDesignIcons
+                  name="file-document-multiple-outline"
+                  size={22}
+                  color="#60A5FA"
+                />
+              </View>
+
+              <View
+                style={
+                  styles.documentSheetHeaderText
+                }>
+                <Text
+                  style={
+                    styles.documentSheetTitle
+                  }>
+                  Capture Fleet Document
+                </Text>
+
+                <Text
+                  style={
+                    styles.documentSheetSubtitle
+                  }>
+                  Bills, receipts, invoices and other fleet documents
+                </Text>
+              </View>
+
+            </View>
+
+            {documentError ? (
+              <View
+                style={
+                  styles.documentErrorBox
+                }>
+                <MaterialDesignIcons
+                  name="alert-circle-outline"
+                  size={18}
+                  color="#FF6B7F"
+                />
+                <Text
+                  style={
+                    styles.documentErrorText
+                  }>
+                  {documentError}
+                </Text>
+              </View>
+            ) : null}
+
+            <View
+              style={
+                styles.documentActionList
+              }>
+
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Take document photo"
+                disabled={isPickingDocument}
+                onPress={handleTakeDocumentPhoto}
+                style={({pressed}) => [
+                  styles.documentOption,
+                  pressed &&
+                    styles.documentOptionPressed,
+                  isPickingDocument &&
+                    styles.documentOptionDisabled,
+                ]}>
+
+                <View
+                  style={
+                    styles.documentOptionIcon
+                  }>
+                  <MaterialDesignIcons
+                    name="camera-outline"
+                    size={21}
+                    color="#60A5FA"
+                  />
+                </View>
+
+                <View
+                  style={
+                    styles.documentOptionText
+                  }>
+                  <Text
+                    style={
+                      styles.documentOptionTitle
+                    }>
+                    {isPickingDocument
+                      ? 'Opening…'
+                      : 'Take Photo'}
+                  </Text>
+                  <Text
+                    style={
+                      styles.documentOptionSubtitle
+                    }>
+                    Capture a bill, receipt or document with the camera
+                  </Text>
+                </View>
+
+                <MaterialDesignIcons
+                  name="chevron-right"
+                  size={22}
+                  color="#667892"
+                />
+
+              </Pressable>
+
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Choose fleet documents from gallery"
+                disabled={isPickingDocument}
+                onPress={handleChooseDocumentFromGallery}
+                style={({pressed}) => [
+                  styles.documentOption,
+                  pressed &&
+                    styles.documentOptionPressed,
+                  isPickingDocument &&
+                    styles.documentOptionDisabled,
+                ]}>
+
+                <View
+                  style={
+                    styles.documentOptionIcon
+                  }>
+                  <MaterialDesignIcons
+                    name="image-multiple-outline"
+                    size={21}
+                    color="#9B5CFF"
+                  />
+                </View>
+
+                <View
+                  style={
+                    styles.documentOptionText
+                  }>
+                  <Text
+                    style={
+                      styles.documentOptionTitle
+                    }>
+                    Choose from Gallery
+                  </Text>
+                  <Text
+                    style={
+                      styles.documentOptionSubtitle
+                    }>
+                    Select up to 10 document photos at once
+                  </Text>
+                </View>
+
+                <MaterialDesignIcons
+                  name="chevron-right"
+                  size={22}
+                  color="#667892"
+                />
+
+              </Pressable>
+
+            </View>
+
+            <View
+              style={
+                styles.documentSelectedHeader
+              }>
+              <Text
+                style={
+                  styles.documentSelectedTitle
+                }>
+                Staged Documents
+              </Text>
+              <Text
+                style={
+                  styles.documentSelectedCount
+                }>
+                {stagedDocuments.length}/10
+              </Text>
+            </View>
+
+            {stagedDocuments.length > 0 ? (
+              <View
+                style={
+                  styles.documentGrid
+                }>
+
+                {stagedDocuments.map(asset => (
+                  <View
+                    key={asset.uri || getDocumentFileName(asset)}
+                    style={
+                      styles.documentPreviewCard
+                    }>
+
+                    {asset.uri ? (
+                      <Image
+                        source={{uri: asset.uri}}
+                        style={
+                          styles.documentPreviewImage
+                        }
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <View
+                        style={
+                          styles.documentPreviewFallback
+                        }>
+                        <MaterialDesignIcons
+                          name="file-document-outline"
+                          size={24}
+                          color="#60A5FA"
+                        />
+                      </View>
+                    )}
+
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Remove ${getDocumentFileName(asset)}`}
+                      hitSlop={5}
+                      onPress={() =>
+                        removeStagedDocument(
+                          asset.uri,
+                        )
+                      }
+                      style={
+                        styles.documentRemoveButton
+                      }>
+                      <MaterialDesignIcons
+                        name="close"
+                        size={14}
+                        color="#FFFFFF"
+                      />
+                    </Pressable>
+
+                    <View
+                      style={
+                        styles.documentPreviewMeta
+                      }>
+                      <Text
+                        numberOfLines={1}
+                        style={
+                          styles.documentPreviewName
+                        }>
+                        {getDocumentFileName(asset)}
+                      </Text>
+                      <Text
+                        style={
+                          styles.documentPreviewSize
+                        }>
+                        {formatDocumentSize(
+                          asset.fileSize,
+                        )}
+                      </Text>
+                    </View>
+
+                  </View>
+                ))}
+
+              </View>
+            ) : (
+              <View
+                style={
+                  styles.documentEmptyState
+                }>
+                <MaterialDesignIcons
+                  name="file-upload-outline"
+                  size={28}
+                  color="#667892"
+                />
+                <Text
+                  style={
+                    styles.documentEmptyTitle
+                  }>
+                  No documents staged
+                </Text>
+                <Text
+                  style={
+                    styles.documentEmptySubtitle
+                  }>
+                  Captured or selected documents will appear here.
+                </Text>
+              </View>
+            )}
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Done with document capture"
+              disabled={isPickingDocument}
+              onPress={closeDocumentCapture}
+              style={({pressed}) => [
+                styles.documentDoneButton,
+                pressed &&
+                  styles.documentDonePressed,
+                isPickingDocument &&
+                  styles.documentDoneDisabled,
+              ]}>
+              <Text
+                style={
+                  styles.documentDoneText
+                }>
+                Done
+              </Text>
+            </Pressable>
+
+            <Text
+              style={
+                styles.documentLocalNote
+              }>
+              Documents are staged locally for now. They are not yet attached to a vehicle, trip or expense record.
+            </Text>
+
+          </View>
+
+        </View>
+
+      </Modal>
+
       {/* PROFILE MODAL */}
 
       <Modal
@@ -2567,6 +2517,14 @@ const styles = StyleSheet.create({
     minHeight: 47,
   },
 
+  headerActions: {
+    flexDirection: 'row',
+
+    alignItems: 'center',
+
+    gap: 8,
+  },
+
   brandBlock: {
     flex: 1,
 
@@ -2606,6 +2564,71 @@ const styles = StyleSheet.create({
 
     color:
       '#94A3B8',
+  },
+
+  /*
+   * DOCUMENT HEADER ACTION
+   */
+
+  documentActionContainer: {
+    position: 'relative',
+
+    zIndex: 10,
+  },
+
+  documentButton: {
+    width: 42,
+    height: 42,
+
+    borderRadius: 21,
+
+    alignItems: 'center',
+    justifyContent: 'center',
+
+    backgroundColor:
+      'rgba(37, 99, 235, 0.16)',
+
+    borderWidth: 1,
+
+    borderColor:
+      'rgba(96, 165, 250, 0.28)',
+  },
+
+  documentPressed: {
+    transform: [
+      {
+        scale: 0.95,
+      },
+    ],
+  },
+
+  documentCountBadge: {
+    position: 'absolute',
+
+    top: -2,
+    right: -2,
+
+    minWidth: 16,
+    height: 16,
+
+    paddingHorizontal: 3,
+
+    borderRadius: 8,
+
+    alignItems: 'center',
+    justifyContent: 'center',
+
+    backgroundColor: '#FF4D6D',
+
+    borderWidth: 1,
+    borderColor: '#020817',
+  },
+
+  documentCountText: {
+    fontSize: 8,
+    lineHeight: 10,
+    fontWeight: '900',
+    color: '#FFFFFF',
   },
 
   /*
@@ -2672,6 +2695,351 @@ const styles = StyleSheet.create({
 
     borderColor:
       '#020817',
+  },
+
+  /*
+   * DOCUMENT CAPTURE MODAL
+   */
+
+  documentModalContainer: {
+    flex: 1,
+
+    justifyContent: 'flex-end',
+
+    backgroundColor: 'rgba(0, 0, 0, 0.34)',
+  },
+
+  documentModalBackdrop: {
+    position: 'absolute',
+
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+  },
+
+  documentModalSheet: {
+    paddingHorizontal: 18,
+    paddingTop: 9,
+    paddingBottom: 18,
+
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+
+    backgroundColor: '#0B1324',
+
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(148, 163, 184, 0.22)',
+
+    elevation: 24,
+
+    shadowColor: '#000000',
+    shadowOffset: {
+      width: 0,
+      height: -10,
+    },
+    shadowOpacity: 0.30,
+    shadowRadius: 24,
+  },
+
+  documentSheetHandle: {
+    alignSelf: 'center',
+
+    width: 42,
+    height: 4,
+
+    marginBottom: 14,
+
+    borderRadius: 2,
+
+    backgroundColor: '#334155',
+  },
+
+  documentSheetHeader: {
+    flexDirection: 'row',
+
+    alignItems: 'center',
+  },
+
+  documentSheetIcon: {
+    width: 44,
+    height: 44,
+
+    borderRadius: 13,
+
+    alignItems: 'center',
+    justifyContent: 'center',
+
+    backgroundColor: 'rgba(59, 130, 246, 0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(96, 165, 250, 0.20)',
+  },
+
+  documentSheetHeaderText: {
+    flex: 1,
+    marginLeft: 11,
+  },
+
+  documentSheetTitle: {
+    fontSize: 16,
+    lineHeight: 21,
+    fontWeight: '900',
+    color: '#F8FAFC',
+  },
+
+  documentSheetSubtitle: {
+    marginTop: 3,
+    fontSize: 10,
+    lineHeight: 14,
+    fontWeight: '500',
+    color: '#94A3B8',
+  },
+
+  documentErrorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+
+    marginTop: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+
+    borderRadius: 12,
+
+    backgroundColor: 'rgba(255, 77, 109, 0.10)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 77, 109, 0.18)',
+  },
+
+  documentErrorText: {
+    flex: 1,
+    marginLeft: 8,
+
+    fontSize: 10,
+    lineHeight: 14,
+    fontWeight: '600',
+    color: '#FF8A9A',
+  },
+
+  documentActionList: {
+    marginTop: 14,
+
+    gap: 8,
+  },
+
+  documentOption: {
+    minHeight: 66,
+
+    flexDirection: 'row',
+    alignItems: 'center',
+
+    paddingHorizontal: 10,
+
+    borderRadius: 14,
+
+    backgroundColor: '#101B2D',
+    borderWidth: 1,
+    borderColor: '#1B2A40',
+  },
+
+  documentOptionPressed: {
+    opacity: 0.72,
+  },
+
+  documentOptionDisabled: {
+    opacity: 0.52,
+  },
+
+  documentOptionIcon: {
+    width: 38,
+    height: 38,
+
+    borderRadius: 11,
+
+    alignItems: 'center',
+    justifyContent: 'center',
+
+    backgroundColor: 'rgba(96, 165, 250, 0.10)',
+  },
+
+  documentOptionText: {
+    flex: 1,
+    marginHorizontal: 10,
+  },
+
+  documentOptionTitle: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '800',
+    color: '#F8FAFC',
+  },
+
+  documentOptionSubtitle: {
+    marginTop: 2,
+    fontSize: 9,
+    lineHeight: 12,
+    fontWeight: '500',
+    color: '#8798AE',
+  },
+
+  documentSelectedHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+
+    marginTop: 16,
+    marginBottom: 8,
+  },
+
+  documentSelectedTitle: {
+    fontSize: 10,
+    lineHeight: 13,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    color: '#A8B6C8',
+  },
+
+  documentSelectedCount: {
+    fontSize: 10,
+    lineHeight: 13,
+    fontWeight: '800',
+    color: '#60A5FA',
+  },
+
+  documentGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginHorizontal: -3,
+  },
+
+  documentPreviewCard: {
+    width: '25%',
+    paddingHorizontal: 3,
+    marginBottom: 8,
+  },
+
+  documentPreviewImage: {
+    width: '100%',
+    aspectRatio: 0.82,
+    borderRadius: 10,
+    backgroundColor: '#111827',
+  },
+
+  documentPreviewFallback: {
+    width: '100%',
+    aspectRatio: 0.82,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 10,
+    backgroundColor: '#101B2D',
+  },
+
+  documentRemoveButton: {
+    position: 'absolute',
+    top: 2,
+    right: 5,
+
+    width: 22,
+    height: 22,
+
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+
+    backgroundColor: 'rgba(15, 23, 42, 0.88)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.16)',
+  },
+
+  documentPreviewMeta: {
+    marginTop: 4,
+  },
+
+  documentPreviewName: {
+    fontSize: 8,
+    lineHeight: 10,
+    fontWeight: '700',
+    color: '#D7E0EA',
+  },
+
+  documentPreviewSize: {
+    marginTop: 1,
+    fontSize: 7,
+    lineHeight: 9,
+    fontWeight: '500',
+    color: '#667892',
+  },
+
+  documentEmptyState: {
+    minHeight: 104,
+
+    alignItems: 'center',
+    justifyContent: 'center',
+
+    paddingHorizontal: 18,
+
+    borderRadius: 14,
+
+    backgroundColor: '#0F1929',
+    borderWidth: 1,
+    borderColor: '#16263B',
+    borderStyle: 'dashed',
+  },
+
+  documentEmptyTitle: {
+    marginTop: 7,
+
+    fontSize: 10,
+    lineHeight: 13,
+    fontWeight: '800',
+    color: '#A8B6C8',
+  },
+
+  documentEmptySubtitle: {
+    marginTop: 3,
+
+    textAlign: 'center',
+
+    fontSize: 8,
+    lineHeight: 11,
+    fontWeight: '500',
+    color: '#667892',
+  },
+
+  documentDoneButton: {
+    minHeight: 46,
+    alignItems: 'center',
+    justifyContent: 'center',
+
+    marginTop: 12,
+
+    borderRadius: 13,
+
+    backgroundColor: '#1688FF',
+  },
+
+  documentDonePressed: {
+    opacity: 0.82,
+  },
+
+  documentDoneDisabled: {
+    opacity: 0.55,
+  },
+
+  documentDoneText: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#FFFFFF',
+  },
+
+  documentLocalNote: {
+    marginTop: 8,
+
+    textAlign: 'center',
+
+    fontSize: 7,
+    lineHeight: 10,
+    fontWeight: '500',
+    color: '#56677D',
   },
 
   /*
@@ -2966,8 +3334,6 @@ profileModalBackdrop: {
   statCardInner: {
     minHeight: 104,
 
-    position: 'relative',
-
     paddingHorizontal: 12,
 
     paddingVertical: 11,
@@ -3038,90 +3404,9 @@ profileModalBackdrop: {
     elevation: 0,
   },
 
-  categoryMotionLayer: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-    overflow: 'hidden',
-  },
-
-  vehicleRouteSvg: {
-    position: 'absolute',
-    right: 6,
-    bottom: 8,
-  },
-
-  vehicleMotionDot: {
-    position: 'absolute',
-    width: 5,
-    height: 5,
-    borderRadius: 3,
-    right: 10,
-    bottom: 32,
-  },
-
-  vehicleDataStream: {
-    position: 'absolute',
-    width: 96,
-    height: 1,
-    top: 18,
-    right: -24,
-  },
-
-  driverEcgSvg: {
-    position: 'absolute',
-    right: 5,
-    bottom: 16,
-  },
-
-  driverBreathingRing: {
-    position: 'absolute',
-    width: 54,
-    height: 54,
-    left: 3,
-    top: 5,
-    borderRadius: 27,
-    borderWidth: 1.5,
-  },
-
-  tripConstellationSvg: {
-    position: 'absolute',
-    right: 3,
-    top: 4,
-  },
-
-  tripParticle: {
-    position: 'absolute',
-    width: 3,
-    height: 3,
-    borderRadius: 2,
-    marginLeft: -1.5,
-    marginTop: -1.5,
-  },
-
-  tripOrbitDot: {
-    position: 'absolute',
-    width: 5,
-    height: 5,
-    borderRadius: 3,
-    left: 21,
-    top: 22,
-  },
-
-  maintenanceBorderSvg: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-  },
-
   statCardContent: {
     flex: 1,
     justifyContent: 'space-between',
-    zIndex: 2,
   },
 
   statCardPressed: {
