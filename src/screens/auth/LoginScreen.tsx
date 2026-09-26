@@ -34,7 +34,8 @@ const {
 const LoginScreen = () => {
   const {login} = useAuth();
 
-  const [email, setEmail] =
+  // Stores the username entered by the FleetFlow user.
+  const [username, setUsername] =
     useState('');
 
   const [password, setPassword] =
@@ -228,19 +229,20 @@ const LoginScreen = () => {
   }, []);
 
   /*
-   * ─────────────────────────────
-   * LOGIN
-   * ─────────────────────────────
-   */
+  * ─────────────────────────────
+  * LOGIN
+  * ─────────────────────────────
+  */
 
+  // Sends the entered username and password to the FastAPI authentication endpoint.
   const handleLogin = async () => {
     if (
-      !email.trim() ||
+      !username.trim() ||
       !password.trim()
     ) {
       Alert.alert(
         'Missing Information',
-        'Please enter your email and password.',
+        'Please enter your username and password.',
       );
 
       return;
@@ -248,12 +250,21 @@ const LoginScreen = () => {
 
     try {
       await login(
-        email.trim(),
+        username.trim(),
+        password,
       );
     } catch (error) {
+      // Shows the actual backend or network error so we can identify the login problem.
+      console.error('Login failed:', error);
+
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Unknown login error';
+
       Alert.alert(
         'Login Error',
-        'Unable to complete login. Please try again.',
+        message,
       );
     }
   };
@@ -535,12 +546,12 @@ const LoginScreen = () => {
 
               </View>
 
+              {/* Collects the username used by the FastAPI authentication endpoint. */}
               <Input
-                label="Email"
-                placeholder="Enter your email"
-                value={email}
-                onChangeText={setEmail}
-                keyboardType="email-address"
+                label="Username"
+                placeholder="Enter your username"
+                value={username}
+                onChangeText={setUsername}
                 autoCapitalize="none"
                 autoCorrect={false}
               />

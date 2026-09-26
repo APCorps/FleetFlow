@@ -1,3 +1,5 @@
+// Manages FleetFlow authentication, JWT storage, session restoration, and login transitions.
+
 import React, {
   createContext,
   useContext,
@@ -7,6 +9,7 @@ import React, {
 } from 'react';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { api } from '../services/api';
 
 interface User {
   email: string;
@@ -18,13 +21,14 @@ interface AuthContextType {
   isLoading: boolean;
   justLoggedIn: boolean;
 
-  login: (email: string) => Promise<void>;
+  login: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
 
   completeLoginTransition: () => void;
 }
 
 const AUTH_USER_KEY = '@fleetflow_auth_user';
+const AUTH_TOKEN_KEY = '@fleetflow_auth_token';
 
 const AuthContext =
   createContext<AuthContextType | undefined>(
@@ -44,18 +48,11 @@ export const AuthProvider = ({
   const [isLoading, setIsLoading] =
     useState(true);
 
-  /*
-   * true only when the user has just completed
-   * a fresh login.
-   *
-   * It remains false when a previous session
-   * is restored from AsyncStorage.
-   */
   const [justLoggedIn, setJustLoggedIn] =
     useState(false);
 
   /*
-   * Restore existing authentication session.
+   * Restore the previous authentication session.
    */
   useEffect(() => {
     const restoreSession = async () => {
@@ -65,15 +62,23 @@ export const AuthProvider = ({
             AUTH_USER_KEY,
           );
 
-        if (storedUser) {
+        const storedToken =
+          await AsyncStorage.getItem(
+            AUTH_TOKEN_KEY,
+          );
+
+        /*
+         * Only restore the session when both
+         * user information and JWT exist.
+         */
+        if (storedUser && storedToken) {
           const parsedUser: User =
             JSON.parse(storedUser);
 
           setUser(parsedUser);
 
           /*
-           * Important:
-           * Restored sessions should NOT trigger
+           * Restored sessions should not trigger
            * the Welcome Back animation.
            */
           setJustLoggedIn(false);
@@ -92,17 +97,47 @@ export const AuthProvider = ({
   }, []);
 
   /*
-   * Fresh login.
+   * Performs a real login against the FastAPI backend.
    */
-  const login = async (email: string) => {
+  const login = async (
+    username: string,
+    password: string,
+  ) => {
+
+    /*
+     * Call FastAPI /auth/login.
+     */
+    const data = await api.login(
+      username,
+      password,
+    );
+
+    /*
+     * Store the JWT securely enough for this
+     * development stage using AsyncStorage.
+     */
+    await AsyncStorage.setItem(
+      AUTH_TOKEN_KEY,
+      data.access_token,
+    );
+
+    /*
+     * Our current frontend expects a User
+     * object containing an email field.
+     *
+     * We temporarily store the username here
+     * so existing navigation/screens continue
+     * working without a larger refactor.
+     */
     const newUser: User = {
-      email,
+      email: username,
     };
 
     setUser(newUser);
 
     /*
-     * Tell the navigator this was a fresh login.
+     * Tell the navigator that this was a
+     * fresh login.
      */
     setJustLoggedIn(true);
 
@@ -113,17 +148,16 @@ export const AuthProvider = ({
   };
 
   /*
-   * Called after Welcome Back finishes.
-   *
-   * This removes the fresh-login state so
-   * the Dashboard becomes the normal screen.
+   * Called after the Welcome Back screen
+   * finishes its transition.
    */
   const completeLoginTransition = () => {
     setJustLoggedIn(false);
   };
 
   /*
-   * Logout.
+   * Logs the user out and removes both the
+   * stored user information and JWT.
    */
   const logout = async () => {
     setUser(null);
@@ -131,6 +165,10 @@ export const AuthProvider = ({
 
     await AsyncStorage.removeItem(
       AUTH_USER_KEY,
+    );
+
+    await AsyncStorage.removeItem(
+      AUTH_TOKEN_KEY,
     );
   };
 
