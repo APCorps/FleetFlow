@@ -1,7 +1,7 @@
 // Centralizes all communication between the React Native app and FleetFlow FastAPI backend.
 
-// Uses the Windows host IP that the Android emulator can successfully reach.
-const API_BASE_URL = 'http://192.168.1.2:8000';
+// Uses the render url that the Android emulator can successfully reach.
+const API_BASE_URL = 'https://fleetflowapi.onrender.com';
 
 export const api = {
 
