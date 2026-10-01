@@ -5,8 +5,10 @@ import React, {
 } from 'react';
 
 import {
+  AccessibilityInfo,
   Animated,
   Easing,
+  PanResponder,
   StyleSheet,
   useWindowDimensions,
   View,
@@ -33,6 +35,7 @@ import VehiclesScreen from '../../screens/vehicles/VehiclesScreen';
 import DriversScreen from '../../screens/drivers/DriversScreen';
 import TripsScreen from '../../screens/trips/TripsScreen';
 import AccountsScreen from '../../screens/accounts/AccountsScreen';
+import MaintenanceScreen from '../../screens/maintenance/MaintenanceScreen';
 
 type NavigationProp =
   NativeStackNavigationProp<
@@ -44,13 +47,24 @@ const TAB_ROUTES: BottomNavRoute[] = [
   'Vehicles',
   'Drivers',
   'Trips',
+  'Maintenance',
   'Accounts',
 ];
+
+const SWIPE_THRESHOLD = 10;
+const DIRECTION_RATIO = 1.15;
+const SNAP_RATIO = 0.22;
+const SNAP_VELOCITY = 0.5;
+const EDGE_RESISTANCE = 0.28;
 
 const MainScreenLayout = () => {
   const {width} =
     useWindowDimensions();
 
+  /*
+   * Keep this hook in place so existing
+   * fast-refresh hook ordering remains stable.
+   */
   const navigation =
     useNavigation<NavigationProp>();
 
@@ -66,107 +80,329 @@ const MainScreenLayout = () => {
     0,
   );
 
-  const contentTranslateX =
-    useRef(
-      new Animated.Value(0),
-    ).current;
+  const animationRef = useRef({
+    value: new Animated.Value(0),
+    gestureStartX: 0,
+    gestureActive: false,
+  });
 
-  /*
-   * ─────────────────────────────────────
-   * TAB TRANSITION
-   * ─────────────────────────────────────
-   */
+  const contentTranslateX =
+    animationRef.current.value;
 
   useEffect(() => {
-    Animated.timing(
-      contentTranslateX,
-      {
-        toValue:
-          -activeIndex * width,
+    contentTranslateX.stopAnimation();
 
-        duration: 320,
-
-        easing:
-          Easing.out(
-            Easing.cubic,
-          ),
-
-        useNativeDriver: true,
-      },
-    ).start();
+    contentTranslateX.setValue(
+      -activeIndex * width,
+    );
   }, [
     activeIndex,
     width,
     contentTranslateX,
   ]);
 
-  /*
-   * ─────────────────────────────────────
-   * BOTTOM NAVIGATION
-   * ─────────────────────────────────────
-   */
+  const animateToIndex = (
+    index: number,
+  ) => {
+    const target =
+      -index * width;
+
+    contentTranslateX.stopAnimation();
+
+    AccessibilityInfo
+      .isReduceMotionEnabled()
+      .then(reduceMotion => {
+        if (reduceMotion) {
+          contentTranslateX.setValue(
+            target,
+          );
+          return;
+        }
+
+        Animated.timing(
+          contentTranslateX,
+          {
+            toValue: target,
+            duration: 300,
+            easing:
+              Easing.out(
+                Easing.cubic,
+              ),
+            useNativeDriver: true,
+          },
+        ).start();
+      })
+      .catch(() => {
+        Animated.timing(
+          contentTranslateX,
+          {
+            toValue: target,
+            duration: 300,
+            easing:
+              Easing.out(
+                Easing.cubic,
+              ),
+            useNativeDriver: true,
+          },
+        ).start();
+      });
+  };
 
   const handleNavigate = (
     route: BottomNavRoute,
   ) => {
+    const nextIndex = Math.max(
+      TAB_ROUTES.indexOf(route),
+      0,
+    );
+
     if (
-      route === activeRoute
+      nextIndex === activeIndex
     ) {
       return;
     }
 
     setActiveRoute(route);
+    animateToIndex(nextIndex);
   };
-
-  /*
-   * ─────────────────────────────────────
-   * DASHBOARD CARD NAVIGATION
-   * ─────────────────────────────────────
-   *
-   * Vehicles / Drivers / Trips:
-   * switch the local tab.
-   *
-   * Maintenance:
-   * remains a normal stack screen.
-   * ─────────────────────────────────────
-   */
 
   const handleDashboardNavigation = (
     route:
       | BottomNavRoute
       | 'Maintenance',
   ) => {
-    if (
-      route === 'Maintenance'
-    ) {
-      navigation.navigate(
-        'Maintenance',
-      );
-
-      return;
-    }
-
-    handleNavigate(route);
+    /*
+     * Maintenance is now a native tab in the
+     * same animated page track.
+     */
+    handleNavigate(
+      route as BottomNavRoute,
+    );
   };
+
+  const panResponder =
+    PanResponder.create({
+      onStartShouldSetPanResponder:
+        () => false,
+
+      onMoveShouldSetPanResponder: (
+        _event,
+        gestureState,
+      ) => {
+        const dx = Math.abs(
+          gestureState.dx,
+        );
+        const dy = Math.abs(
+          gestureState.dy,
+        );
+
+        if (
+          dx < SWIPE_THRESHOLD &&
+          dy < SWIPE_THRESHOLD
+        ) {
+          return false;
+        }
+
+        return (
+          dx >
+          dy * DIRECTION_RATIO
+        );
+      },
+
+      onMoveShouldSetPanResponderCapture:
+        (
+          _event,
+          gestureState,
+        ) => {
+          const dx = Math.abs(
+            gestureState.dx,
+          );
+          const dy = Math.abs(
+            gestureState.dy,
+          );
+
+          if (
+            dx < SWIPE_THRESHOLD &&
+            dy < SWIPE_THRESHOLD
+          ) {
+            return false;
+          }
+
+          return (
+            dx >
+            dy * DIRECTION_RATIO
+          );
+        },
+
+      onPanResponderGrant: () => {
+        animationRef.current
+          .gestureActive = true;
+
+        animationRef.current
+          .gestureStartX =
+          -activeIndex * width;
+
+        contentTranslateX.stopAnimation();
+      },
+
+      onPanResponderMove: (
+        _event,
+        gestureState,
+      ) => {
+        if (
+          !animationRef.current
+            .gestureActive
+        ) {
+          return;
+        }
+
+        const firstPageX = 0;
+
+        const lastPageX =
+          -(
+            TAB_ROUTES.length -
+            1
+          ) * width;
+
+        let nextX =
+          animationRef.current
+            .gestureStartX +
+          gestureState.dx;
+
+        if (
+          nextX > firstPageX
+        ) {
+          nextX =
+            firstPageX +
+            (nextX -
+              firstPageX) *
+              EDGE_RESISTANCE;
+        }
+
+        if (
+          nextX < lastPageX
+        ) {
+          nextX =
+            lastPageX +
+            (nextX -
+              lastPageX) *
+              EDGE_RESISTANCE;
+        }
+
+        contentTranslateX.setValue(
+          nextX,
+        );
+      },
+
+      onPanResponderRelease: (
+        _event,
+        gestureState,
+      ) => {
+        if (
+          !animationRef.current
+            .gestureActive
+        ) {
+          return;
+        }
+
+        animationRef.current
+          .gestureActive = false;
+
+        const currentIndex =
+          activeIndex;
+
+        let targetIndex =
+          currentIndex;
+
+        const velocityX =
+          gestureState.vx;
+
+        if (
+          Math.abs(velocityX) >=
+          SNAP_VELOCITY
+        ) {
+          if (
+            velocityX < 0 &&
+            currentIndex <
+              TAB_ROUTES.length -
+                1
+          ) {
+            targetIndex =
+              currentIndex + 1;
+          } else if (
+            velocityX > 0 &&
+            currentIndex > 0
+          ) {
+            targetIndex =
+              currentIndex - 1;
+          }
+        } else {
+          const snapDistance =
+            width * SNAP_RATIO;
+
+          if (
+            gestureState.dx <
+              -snapDistance &&
+            currentIndex <
+              TAB_ROUTES.length -
+                1
+          ) {
+            targetIndex =
+              currentIndex + 1;
+          } else if (
+            gestureState.dx >
+              snapDistance &&
+            currentIndex > 0
+          ) {
+            targetIndex =
+              currentIndex - 1;
+          }
+        }
+
+        const nextRoute =
+          TAB_ROUTES[targetIndex];
+
+        if (
+          targetIndex !==
+          currentIndex
+        ) {
+          setActiveRoute(
+            nextRoute,
+          );
+        }
+
+        animateToIndex(
+          targetIndex,
+        );
+      },
+
+      onPanResponderTerminate:
+        () => {
+          animationRef.current
+            .gestureActive = false;
+
+          animateToIndex(
+            activeIndex,
+          );
+        },
+
+      onPanResponderTerminationRequest:
+        () => false,
+    });
+
+  /*
+   * Prevent an unused-navigation warning while
+   * keeping the existing hook order intact.
+   */
+  void navigation;
 
   return (
     <View
       style={styles.container}>
 
-      {/*
-       * ─────────────────────────────
-       * CONTENT VIEWPORT
-       * ─────────────────────────────
-       *
-       * The viewport stays fixed.
-       * Only contentTrack receives
-       * translateX.
-       */}
-
       <View
-        style={
-          styles.contentViewport
-        }>
+        style={styles.contentViewport}
+        {...panResponder.panHandlers}>
 
         <Animated.View
           style={[
@@ -185,98 +421,66 @@ const MainScreenLayout = () => {
             },
           ]}>
 
-          {/* DASHBOARD */}
-
           <View
             style={[
               styles.page,
-              {
-                width,
-              },
+              {width},
             ]}>
-
             <DashboardScreen
               onNavigate={
                 handleDashboardNavigation
               }
             />
-
           </View>
-
-          {/* VEHICLES */}
 
           <View
             style={[
               styles.page,
-              {
-                width,
-              },
+              {width},
             ]}>
-
             <VehiclesScreen />
-
           </View>
-
-          {/* DRIVERS */}
 
           <View
             style={[
               styles.page,
-              {
-                width,
-              },
+              {width},
             ]}>
-
             <DriversScreen />
-
           </View>
-
-          {/* TRIPS */}
 
           <View
             style={[
               styles.page,
-              {
-                width,
-              },
+              {width},
             ]}>
-
             <TripsScreen />
-
           </View>
-
-          {/* ACCOUNTS */}
 
           <View
             style={[
               styles.page,
-              {
-                width,
-              },
+              {width},
             ]}>
+            <MaintenanceScreen
+              onNavigateToDashboard={() =>
+                handleNavigate(
+                  'Dashboard',
+                )
+              }
+            />
+          </View>
 
+          <View
+            style={[
+              styles.page,
+              {width},
+            ]}>
             <AccountsScreen />
-
           </View>
 
         </Animated.View>
-
       </View>
-
-      {/*
-       * ─────────────────────────────
-       * FIXED BOTTOM NAVIGATION
-       * ─────────────────────────────
-       *
-       * IMPORTANT:
-       *
-       * This is deliberately OUTSIDE
-       * contentTrack.
-       *
-       * It receives no translateX,
-       * scale, opacity, or transition
-       * from the page track.
-       */}
 
       <FloatingBottomNav
         activeRoute={
@@ -292,41 +496,24 @@ const MainScreenLayout = () => {
 };
 
 const styles = StyleSheet.create({
-
   container: {
     flex: 1,
-
     backgroundColor:
-      '#020817',
+      '#050711',
   },
-
-  /*
-   * Fixed window through which
-   * the horizontal track moves.
-   */
 
   contentViewport: {
     flex: 1,
-
     overflow: 'hidden',
   },
 
-  /*
-   * ONLY THIS ELEMENT MOVES.
-   */
-
   contentTrack: {
-    flex: 1,
-
     flexDirection: 'row',
-
-    willChange:
-      'transform',
+    height: '100%',
   },
 
   page: {
-    flex: 1,
-
+    height: '100%',
     minWidth: 0,
   },
 });

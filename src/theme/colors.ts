@@ -5,49 +5,47 @@ const colors = {
    * ─────────────────────────────
    */
 
-  background: '#EEF3FA',
+  background: '#050711',
 
-  backgroundSoft: '#F7F9FC',
-
-  /*
-   * ─────────────────────────────
-   * GLASS SURFACES
-   * ─────────────────────────────
-   */
-
-  surface: 'rgba(255, 255, 255, 0.78)',
-
-  surfaceElevated:
-    'rgba(255, 255, 255, 0.94)',
-
-  surfaceStrong:
-    'rgba(255, 255, 255, 0.98)',
+  backgroundSoft: '#080B18',
 
   /*
    * ─────────────────────────────
-   * AURORA PRIMARY
+   * DARK ENTERPRISE SURFACES
    * ─────────────────────────────
    */
 
-  primary: '#4F46E5',
+  surface: 'rgba(18, 24, 46, 0.84)',
 
-  primaryPressed: '#4338CA',
+  surfaceElevated: 'rgba(20, 26, 49, 0.90)',
 
-  primarySoft: '#E0E7FF',
-
-  primaryBorder: '#6366F1',
-
-  primaryShadow: '#4F46E5',
+  surfaceStrong: '#10182B',
 
   /*
    * ─────────────────────────────
-   * AURORA SECONDARY
+   * PRIMARY
    * ─────────────────────────────
    */
 
-  secondary: '#7C3AED',
+  primary: '#5B8CFF',
 
-  secondarySoft: '#EDE9FE',
+  primaryPressed: '#4878E8',
+
+  primarySoft: 'rgba(91, 140, 255, 0.14)',
+
+  primaryBorder: 'rgba(91, 140, 255, 0.28)',
+
+  primaryShadow: '#5B8CFF',
+
+  /*
+   * ─────────────────────────────
+   * SECONDARY
+   * ─────────────────────────────
+   */
+
+  secondary: '#9B7BFF',
+
+  secondarySoft: 'rgba(155, 123, 255, 0.14)',
 
   /*
    * ─────────────────────────────
@@ -56,7 +54,7 @@ const colors = {
    */
 
   categories: {
-    dashboard: '#3B82F6',
+    dashboard: '#5B8CFF',
 
     vehicles: '#1688FF',
 
@@ -71,32 +69,39 @@ const colors = {
 
   /*
    * ─────────────────────────────
+   * EXTRA AURORA ACCENTS
+   * ─────────────────────────────
+   */
+
+  electricCyan: '#55D6FF',
+
+  violet: '#C15CFF',
+
+  /*
+   * ─────────────────────────────
    * TEXT
    * ─────────────────────────────
    */
 
-  textPrimary: '#172033',
+  textPrimary: '#F5F7FF',
 
-  textSecondary: '#64748B',
+  textSecondary: '#9AA4BF',
 
-  textMuted: '#94A3B8',
+  textMuted: '#6F7892',
 
-  textSoft: '#CBD5E1',
+  textSoft: '#CBD3E6',
 
   /*
    * ─────────────────────────────
-   * GLASS BORDERS
+   * BORDERS
    * ─────────────────────────────
    */
 
-  border:
-    'rgba(148, 163, 184, 0.22)',
+  border: 'rgba(255, 255, 255, 0.08)',
 
-  borderLight:
-    'rgba(255, 255, 255, 0.82)',
+  borderLight: 'rgba(255, 255, 255, 0.05)',
 
-  borderStrong:
-    'rgba(99, 102, 241, 0.20)',
+  borderStrong: 'rgba(143, 157, 255, 0.15)',
 
   /*
    * ─────────────────────────────
@@ -104,21 +109,21 @@ const colors = {
    * ─────────────────────────────
    */
 
-  success: '#16A34A',
+  success: '#39E6C4',
 
-  successSoft: '#DCFCE7',
+  successSoft: 'rgba(57, 230, 196, 0.14)',
 
-  warning: '#D97706',
+  warning: '#FFC857',
 
-  warningSoft: '#FEF3C7',
+  warningSoft: 'rgba(255, 200, 87, 0.14)',
 
-  danger: '#DC2626',
+  danger: '#FF6685',
 
-  dangerSoft: '#FEE2E2',
+  dangerSoft: 'rgba(255, 102, 133, 0.14)',
 
-  info: '#0891B2',
+  info: '#55D6FF',
 
-  infoSoft: '#CFFAFE',
+  infoSoft: 'rgba(85, 214, 255, 0.14)',
 
   /*
    * ─────────────────────────────

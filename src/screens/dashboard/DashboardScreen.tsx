@@ -8,17 +8,21 @@ import {
   Image,
   Modal,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from 'react-native';
 
 import {
   SafeAreaView,
+  useSafeAreaInsets,
 } from 'react-native-safe-area-context';
 
-import MaterialDesignIcons from
-  '@react-native-vector-icons/material-design-icons';
+import {
+  MaterialDesignIcons,
+} from '@react-native-vector-icons/material-design-icons/static';
 
 import {
   launchCamera,
@@ -44,6 +48,11 @@ import type {
   BottomNavRoute,
 } from '../../components/FloatingBottomNav/FloatingBottomNav';
 
+import {
+  colors,
+  radius,
+} from '../../theme';
+
 /*
  * ─────────────────────────────────────
  * ICON TYPE
@@ -62,33 +71,29 @@ type DashboardIconName =
  */
 
 const FLEET_COLORS = {
-  vehicles: '#1688FF',
-  drivers: '#00D6C9',
-  trips: '#9B5CFF',
-  maintenance: '#FF9F1C',
+  vehicles: colors.categories.vehicles,
+  drivers: colors.categories.drivers,
+  trips: colors.categories.trips,
+  maintenance: colors.categories.maintenance,
 } as const;
 
 const FLEET_CARD_SURFACES = {
-  vehicles: '#071828',
-  drivers: '#06201F',
-  trips: '#120A22',
-  maintenance: '#211808',
+  vehicles: 'rgba(12, 30, 54, 0.92)',
+  drivers: 'rgba(7, 35, 34, 0.92)',
+  trips: 'rgba(25, 13, 45, 0.92)',
+  maintenance: 'rgba(40, 28, 8, 0.92)',
 } as const;
 
 /*
  * ─────────────────────────────────────
  * STATUS COLORS
  * ─────────────────────────────────────
- *
- * Blue  = informational
- * Amber = warning
- * Red   = urgent
  */
 
 const STATUS_COLORS = {
-  info: '#60A5FA',
-  warning: '#FBBF24',
-  urgent: '#FF5A70',
+  info: colors.info,
+  warning: colors.warning,
+  urgent: colors.danger,
 } as const;
 
 /*
@@ -98,8 +103,15 @@ const STATUS_COLORS = {
  */
 
 const FINANCIAL_COLORS = {
-  profit: '#00D6A3',
-  loss: '#FF4D6D',
+  profit: colors.success,
+  loss: colors.danger,
+} as const;
+
+const ICON_SIZES = {
+  header: 21,
+  card: 21,
+  activity: 19,
+  action: 20,
 } as const;
 
 /*
@@ -592,7 +604,7 @@ const StatCard = ({
 
             <MaterialDesignIcons
               name={icon}
-              size={21}
+              size={ICON_SIZES.card}
               color={color}
             />
 
@@ -689,7 +701,7 @@ const ActivityRow = ({
 
         <MaterialDesignIcons
           name={icon}
-          size={20}
+          size={ICON_SIZES.activity}
           color={color}
         />
 
@@ -731,6 +743,107 @@ const ActivityRow = ({
   );
 };
 
+const ProgressMetricRow = ({
+  icon,
+  title,
+  value,
+  color,
+}: {
+  icon: DashboardIconName;
+  title: string;
+  value: number;
+  color: string;
+}) => {
+  const clampedValue = Math.max(0, Math.min(1, value));
+
+  return (
+    <View style={styles.healthRow}>
+      <View style={styles.healthRowHeader}>
+        <View style={styles.healthLabelRow}>
+          <MaterialDesignIcons
+            name={icon}
+            size={18}
+            color={color}
+          />
+          <Text style={styles.healthTitle}>{title}</Text>
+        </View>
+        <Text style={[styles.healthValue, {color}]}>{Math.round(clampedValue * 100)}%</Text>
+      </View>
+
+      <View style={styles.healthTrack}>
+        <View
+          style={[
+            styles.healthFill,
+            {
+              width: `${clampedValue * 100}%`,
+              backgroundColor: color,
+            },
+          ]}
+        />
+      </View>
+    </View>
+  );
+};
+
+const AttentionRow = ({
+  icon,
+  color,
+  title,
+  subtitle,
+  value,
+  onPress,
+}: {
+  icon: DashboardIconName;
+  color: string;
+  title: string;
+  subtitle: string;
+  value: number;
+  onPress?: () => void;
+}) => {
+  return (
+    <Pressable
+      accessibilityRole={onPress ? 'button' : undefined}
+      accessibilityLabel={title}
+      disabled={!onPress}
+      onPress={onPress}
+      style={({pressed}) => [
+        styles.attentionRow,
+        pressed && styles.attentionPressed,
+      ]}>
+      <View
+        style={[
+          styles.attentionIcon,
+          {backgroundColor: `${color}16`},
+        ]}>
+        <MaterialDesignIcons
+          name={icon}
+          size={19}
+          color={color}
+        />
+      </View>
+
+      <View style={styles.attentionText}>
+        <Text style={styles.attentionTitle} numberOfLines={1}>
+          {title}
+        </Text>
+        <Text style={styles.attentionSubtitle} numberOfLines={2}>
+          {subtitle}
+        </Text>
+      </View>
+
+      <Text style={[styles.attentionValue, {color}]}>{value}</Text>
+
+      {onPress && (
+        <MaterialDesignIcons
+          name="chevron-right"
+          size={21}
+          color={colors.textMuted}
+        />
+      )}
+    </Pressable>
+  );
+};
+
 /*
  * ─────────────────────────────────────
  * DASHBOARD
@@ -746,6 +859,17 @@ type DashboardScreenProps = {
 const DashboardScreen = ({
   onNavigate,
 }: DashboardScreenProps) => {
+
+  const {width} = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+
+  const isTablet = width >= 600;
+  const horizontalPadding =
+    width < 360 ? 14 : width < 430 ? 18 : 22;
+  const bottomContentPadding =
+    Math.max(insets.bottom, 12) + 112;
+  const glowSize = Math.max(width * 0.72, 240);
+  const financeStacked = width < 380;
 
   /*
    * ALL HOOKS AT THE TOP
@@ -928,6 +1052,31 @@ const DashboardScreen = ({
         record.priority === 'High',
     ).length;
 
+  const vehicleAvailability =
+    totalVehicles > 0
+      ? activeVehicles / totalVehicles
+      : 0;
+
+  const driverAvailability =
+    totalDrivers > 0
+      ? activeDrivers / totalDrivers
+      : 0;
+
+  const tripActivity =
+    totalTrips > 0
+      ? inProgressTrips / totalTrips
+      : 0;
+
+  const maintenanceReadiness =
+    totalVehicles > 0
+      ? Math.max(
+          0,
+          (totalVehicles - maintenanceVehicles) /
+            totalVehicles,
+        )
+      : 0;
+
+
   /*
    * ─────────────────────────────────────
    * FINANCIAL DATA
@@ -1015,14 +1164,24 @@ const DashboardScreen = ({
       }
 
       if (response.errorCode) {
-        setDocumentError(
-          response.errorMessage ||
-            'The camera could not be opened.',
-        );
+        const cameraMessage =
+          response.errorCode === 'permission'
+            ? 'Camera permission was denied. Please allow camera access in Android settings.'
+            : response.errorCode === 'camera_unavailable'
+            ? 'The camera is unavailable on this device right now.'
+            : response.errorMessage ||
+              'The camera could not be opened.';
+
+        setDocumentError(cameraMessage);
         return;
       }
 
-      appendDocumentAssets(response.assets || []);
+      if (!response.assets?.length) {
+        setDocumentError('No document photo was captured.');
+        return;
+      }
+
+      appendDocumentAssets(response.assets);
     } catch (error) {
       console.error(
         'Document camera failed:',
@@ -1065,7 +1224,12 @@ const DashboardScreen = ({
         return;
       }
 
-      appendDocumentAssets(response.assets || []);
+      if (!response.assets?.length) {
+        setDocumentError('No document was selected.');
+        return;
+      }
+
+      appendDocumentAssets(response.assets);
     } catch (error) {
       console.error(
         'Document gallery failed:',
@@ -1258,22 +1422,58 @@ const DashboardScreen = ({
         style={styles.background}>
 
         <View
-          style={styles.blueGlow}
+          style={[
+            styles.blueGlow,
+            {
+              width: glowSize,
+              height: glowSize,
+              borderRadius: glowSize / 2,
+            },
+          ]}
         />
 
         <View
-          style={styles.violetGlow}
+          style={[
+            styles.violetGlow,
+            {
+              width: glowSize * 0.88,
+              height: glowSize * 0.88,
+              borderRadius: glowSize * 0.44,
+            },
+          ]}
         />
 
         <View
-          style={styles.cyanGlow}
+          style={[
+            styles.cyanGlow,
+            {
+              width: glowSize * 0.92,
+              height: glowSize * 0.92,
+              borderRadius: glowSize * 0.46,
+            },
+          ]}
         />
 
       </View>
 
       {/* DASHBOARD */}
 
-      <View style={styles.screen}>
+      <ScrollView
+        style={styles.screen}
+        contentContainerStyle={[
+          styles.screenContent,
+          {
+            paddingHorizontal: horizontalPadding,
+            paddingBottom: bottomContentPadding,
+          },
+          isTablet &&
+            styles.screenContentTablet,
+        ]}
+        showsVerticalScrollIndicator={false}
+        bounces
+        scrollEventThrottle={16}
+        keyboardShouldPersistTaps="handled"
+        nestedScrollEnabled>
 
         {/* HEADER */}
 
@@ -1284,7 +1484,10 @@ const DashboardScreen = ({
             style={styles.brandBlock}>
 
             <Text
-              style={styles.brand}
+              style={[
+                styles.brand,
+                {fontSize: isTablet ? 29 : width < 360 ? 23 : 25},
+              ]}
               numberOfLines={1}
               adjustsFontSizeToFit
               minimumFontScale={0.8}>
@@ -1334,7 +1537,7 @@ const DashboardScreen = ({
 
                 <MaterialDesignIcons
                   name="camera-outline"
-                  size={21}
+                  size={ICON_SIZES.header}
                   color="#60A5FA"
                 />
 
@@ -1350,8 +1553,8 @@ const DashboardScreen = ({
                     style={
                       styles.documentCountText
                     }>
-                    {stagedDocuments.length > 9
-                      ? '9+'
+                    {stagedDocuments.length >= 10
+                      ? '10'
                       : stagedDocuments.length}
                   </Text>
                 </View>
@@ -1540,6 +1743,120 @@ const DashboardScreen = ({
 
         </View>
 
+        {/* ATTENTION REQUIRED */}
+
+        <View
+          style={styles.sectionHeadingBlock}>
+          <Text style={styles.sectionTitle}>
+            ATTENTION REQUIRED
+          </Text>
+          <Text style={styles.sectionSubtitle}>
+            Items that may require operational action
+          </Text>
+        </View>
+
+        <View style={styles.attentionCard}>
+          {highPriorityAlerts > 0 && (
+            <AttentionRow
+              icon="alert-circle-outline"
+              color={STATUS_COLORS.urgent}
+              title="High-priority maintenance"
+              subtitle="Maintenance records marked high priority"
+              value={highPriorityAlerts}
+              onPress={() => onNavigate?.('Maintenance')}
+            />
+          )}
+
+          {highPriorityAlerts > 0 && upcomingMaintenance > 0 && (
+            <View style={styles.attentionDivider} />
+          )}
+
+          {upcomingMaintenance > 0 && (
+            <AttentionRow
+              icon="wrench-clock-outline"
+              color={STATUS_COLORS.warning}
+              title="Upcoming maintenance"
+              subtitle="Scheduled or in-progress maintenance items"
+              value={upcomingMaintenance}
+              onPress={() => onNavigate?.('Maintenance')}
+            />
+          )}
+
+          {upcomingMaintenance > 0 && inProgressTrips > 0 && (
+            <View style={styles.attentionDivider} />
+          )}
+
+          {inProgressTrips > 0 && (
+            <AttentionRow
+              icon="truck-fast-outline"
+              color={STATUS_COLORS.info}
+              title="Trips in progress"
+              subtitle="Trips currently moving through the fleet"
+              value={inProgressTrips}
+              onPress={() => onNavigate?.('Trips')}
+            />
+          )}
+
+          {highPriorityAlerts === 0 &&
+            upcomingMaintenance === 0 &&
+            inProgressTrips === 0 && (
+              <View style={styles.attentionEmpty}>
+                <MaterialDesignIcons
+                  name="check-circle-outline"
+                  size={21}
+                  color={FINANCIAL_COLORS.profit}
+                />
+                <Text style={styles.attentionEmptyTitle}>
+                  No immediate attention items
+                </Text>
+                <Text style={styles.attentionEmptySubtitle}>
+                  Your current fleet data has no flagged operational items.
+                </Text>
+              </View>
+            )}
+        </View>
+
+        {/* FLEET HEALTH */}
+
+        <View style={styles.sectionHeadingBlock}>
+          <Text style={styles.sectionTitle}>
+            FLEET HEALTH
+          </Text>
+          <Text style={styles.sectionSubtitle}>
+            Current availability and operational readiness
+          </Text>
+        </View>
+
+        <View style={styles.healthCard}>
+          <ProgressMetricRow
+            icon="truck-outline"
+            title="Vehicle availability"
+            value={vehicleAvailability}
+            color={FLEET_COLORS.vehicles}
+          />
+
+          <ProgressMetricRow
+            icon="account-check-outline"
+            title="Driver availability"
+            value={driverAvailability}
+            color={FLEET_COLORS.drivers}
+          />
+
+          <ProgressMetricRow
+            icon="route"
+            title="Trip activity"
+            value={tripActivity}
+            color={FLEET_COLORS.trips}
+          />
+
+          <ProgressMetricRow
+            icon="shield-check-outline"
+            title="Maintenance readiness"
+            value={maintenanceReadiness}
+            color={FLEET_COLORS.maintenance}
+          />
+        </View>
+
         {/* FINANCIAL PERFORMANCE */}
 
         <View
@@ -1573,14 +1890,20 @@ const DashboardScreen = ({
         </View>
 
         <View
-          style={styles.financeCard}>
+          style={[
+            styles.financeCard,
+            financeStacked &&
+              styles.financeCardStacked,
+          ]}>
 
           {/* PROFIT / LOSS GRAPHIC */}
 
           <View
-            style={
-              styles.financeCircleArea
-            }>
+            style={[
+              styles.financeCircleArea,
+              financeStacked &&
+                styles.financeCircleAreaStacked,
+            ]}>
 
             <View
               style={[
@@ -1906,14 +2229,14 @@ const DashboardScreen = ({
 
         </View>
 
-      </View>
+      </ScrollView>
 
       {/* DOCUMENT CAPTURE MODAL */}
 
       <Modal
         visible={documentCaptureVisible}
         transparent
-        animationType="slide"
+        animationType={reduceMotion ? 'none' : 'slide'}
         statusBarTranslucent
         onRequestClose={closeDocumentCapture}>
 
@@ -1935,6 +2258,13 @@ const DashboardScreen = ({
             style={
               styles.documentModalSheet
             }>
+
+            <ScrollView
+              style={styles.documentSheetScroll}
+              contentContainerStyle={styles.documentSheetScrollContent}
+              showsVerticalScrollIndicator={false}
+              bounces={false}
+              nestedScrollEnabled>
 
             <View
               style={
@@ -2022,7 +2352,7 @@ const DashboardScreen = ({
                   }>
                   <MaterialDesignIcons
                     name="camera-outline"
-                    size={21}
+                    size={ICON_SIZES.action}
                     color="#60A5FA"
                   />
                 </View>
@@ -2074,7 +2404,7 @@ const DashboardScreen = ({
                   }>
                   <MaterialDesignIcons
                     name="image-multiple-outline"
-                    size={21}
+                    size={ICON_SIZES.action}
                     color="#9B5CFF"
                   />
                 </View>
@@ -2255,6 +2585,8 @@ const DashboardScreen = ({
               Documents are staged locally for now. They are not yet attached to a vehicle, trip or expense record.
             </Text>
 
+            </ScrollView>
+
           </View>
 
         </View>
@@ -2296,6 +2628,13 @@ const DashboardScreen = ({
           <Animated.View
             style={[
               styles.profileModalMenu,
+              {
+                width: Math.min(
+                  width * 0.76,
+                  isTablet ? 320 : 280,
+                ),
+                right: horizontalPadding,
+              },
               {
                 opacity: profilePopupOpacity,
                 transform: [
@@ -2426,17 +2765,12 @@ const styles = StyleSheet.create({
     flex: 1,
 
     backgroundColor:
-      '#020817',
+      colors.background,
   },
 
   screen: {
     flex: 1,
-
-    paddingHorizontal: 22,
-
-    paddingTop: 8,
-
-    paddingBottom: 100,
+    backgroundColor: colors.background,
   },
 
   /*
@@ -2454,19 +2788,14 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
 
     backgroundColor:
-      '#020817',
+      '#050711',
   },
 
   blueGlow: {
     position: 'absolute',
 
-    width: 300,
-    height: 300,
-
-    borderRadius: 150,
-
-    top: -170,
-    right: -130,
+    top: '-46%',
+    right: '-24%',
 
     backgroundColor:
       'rgba(37, 99, 235, 0.13)',
@@ -2475,13 +2804,8 @@ const styles = StyleSheet.create({
   violetGlow: {
     position: 'absolute',
 
-    width: 270,
-    height: 270,
-
-    borderRadius: 135,
-
-    top: 250,
-    left: -180,
+    top: '28%',
+    left: '-34%',
 
     backgroundColor:
       'rgba(124, 58, 237, 0.08)',
@@ -2490,13 +2814,8 @@ const styles = StyleSheet.create({
   cyanGlow: {
     position: 'absolute',
 
-    width: 280,
-    height: 280,
-
-    borderRadius: 140,
-
-    bottom: -180,
-    right: -150,
+    bottom: '-30%',
+    right: '-28%',
 
     backgroundColor:
       'rgba(8, 145, 178, 0.08)',
@@ -2514,7 +2833,7 @@ const styles = StyleSheet.create({
     justifyContent:
       'space-between',
 
-    minHeight: 47,
+    minHeight: 46,
   },
 
   headerActions: {
@@ -2723,6 +3042,8 @@ const styles = StyleSheet.create({
     paddingTop: 9,
     paddingBottom: 18,
 
+    maxHeight: '86%',
+
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
 
@@ -2828,6 +3149,8 @@ const styles = StyleSheet.create({
 
   documentOption: {
     minHeight: 66,
+
+    width: '100%',
 
     flexDirection: 'row',
     alignItems: 'center',
@@ -3500,8 +3823,164 @@ profileModalBackdrop: {
    * FINANCIAL PERFORMANCE
    */
 
+  /*
+   * ATTENTION REQUIRED
+   */
+
+  attentionCard: {
+    marginTop: 2,
+    paddingHorizontal: 11,
+    paddingVertical: 3,
+    borderRadius: radius.card,
+    backgroundColor: 'rgba(10, 21, 39, 0.94)',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+
+  attentionRow: {
+    minHeight: 60,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  attentionPressed: {
+    opacity: 0.68,
+  },
+
+  attentionIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  attentionText: {
+    flex: 1,
+    minWidth: 0,
+    marginLeft: 9,
+    marginRight: 8,
+  },
+
+  attentionTitle: {
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: '800',
+    color: colors.textPrimary,
+  },
+
+  attentionSubtitle: {
+    marginTop: 2,
+    fontSize: 9,
+    lineHeight: 12,
+    fontWeight: '500',
+    color: colors.textSecondary,
+  },
+
+  attentionValue: {
+    minWidth: 24,
+    marginRight: 3,
+    fontSize: 17,
+    lineHeight: 21,
+    fontWeight: '900',
+    textAlign: 'right',
+  },
+
+  attentionDivider: {
+    height: 1,
+    marginLeft: 45,
+    backgroundColor: colors.borderLight,
+  },
+
+  attentionEmpty: {
+    minHeight: 74,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+
+  attentionEmptyTitle: {
+    marginTop: 6,
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: '800',
+    color: colors.textPrimary,
+  },
+
+  attentionEmptySubtitle: {
+    marginTop: 3,
+    fontSize: 8,
+    lineHeight: 11,
+    fontWeight: '500',
+    textAlign: 'center',
+    color: colors.textMuted,
+  },
+
+  /*
+   * FLEET HEALTH
+   */
+
+  healthCard: {
+    marginTop: 2,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: radius.card,
+    backgroundColor: 'rgba(10, 21, 39, 0.94)',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+
+  healthRow: {
+    paddingVertical: 6,
+  },
+
+  healthRowHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+
+  healthLabelRow: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    minWidth: 0,
+  },
+
+  healthTitle: {
+    marginLeft: 8,
+    fontSize: 10,
+    lineHeight: 13,
+    fontWeight: '700',
+    color: colors.textSoft,
+  },
+
+  healthValue: {
+    marginLeft: 8,
+    fontSize: 10,
+    lineHeight: 13,
+    fontWeight: '900',
+  },
+
+  healthTrack: {
+    height: 6,
+    marginTop: 6,
+    borderRadius: 3,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+  },
+
+  healthFill: {
+    height: '100%',
+    minWidth: 2,
+    borderRadius: 3,
+  },
+
   financeCard: {
     minHeight: 137,
+
+    width: '100%',
 
     flexDirection: 'row',
 
@@ -3514,12 +3993,12 @@ profileModalBackdrop: {
     borderRadius: 17,
 
     backgroundColor:
-      'rgba(5, 24, 43, 0.96)',
+      'rgba(10, 21, 39, 0.94)',
 
     borderWidth: 1,
 
     borderColor:
-      'rgba(59, 130, 246, 0.22)',
+      'rgba(91, 140, 255, 0.18)',
 
     elevation: 4,
   },
@@ -3581,6 +4060,24 @@ profileModalBackdrop: {
 
     color:
       '#CBD5E1',
+  },
+
+
+  financeCardStacked: {
+    flexDirection: 'column',
+  },
+
+  financeCircleAreaStacked: {
+    width: '100%',
+    paddingVertical: 6,
+  },
+
+  documentSheetScroll: {
+    maxHeight: '100%',
+  },
+
+  documentSheetScrollContent: {
+    paddingBottom: 2,
   },
 
   financeDetails: {
@@ -3663,12 +4160,12 @@ profileModalBackdrop: {
     borderRadius: 17,
 
     backgroundColor:
-      'rgba(5, 24, 43, 0.96)',
+      'rgba(10, 21, 39, 0.94)',
 
     borderWidth: 1,
 
     borderColor:
-      'rgba(148, 163, 184, 0.15)',
+      colors.border,
   },
 
   activityRow: {
