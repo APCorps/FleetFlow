@@ -1,22 +1,62 @@
 import React, {useState} from 'react';
-import {useNavigation, useRoute} from '@react-navigation/native';
+
 import {
   Alert,
-  SafeAreaView,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
 
+import {
+  useNavigation,
+  useRoute,
+} from '@react-navigation/native';
+
+import type {
+  NativeStackNavigationProp,
+} from '@react-navigation/native-stack';
+
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
+
+import {
+  MaterialDesignIcons,
+} from '@react-native-vector-icons/material-design-icons/static';
+
 import {Button, Card} from '../../components';
 import {useDrivers, useVehicles} from '../../store';
-import {Driver} from '../../types';
+import type {Driver} from '../../types';
+
+import type {
+  RootStackParamList,
+} from '../../navigation/AppNavigator';
+
+type EditDriverNavigationProp =
+  NativeStackNavigationProp<
+    RootStackParamList
+  >;
+
+type DriverStatus =
+  | 'Active'
+  | 'Inactive'
+  | 'On Leave';
+
+const DRIVER_TEAL = '#00D6C9';
+
+const STATUS_COLORS = {
+  Active: '#00D6C9',
+  Inactive: '#F59E0B',
+  'On Leave': '#EF4444',
+} as const;
 
 const EditDriverScreen = () => {
-  const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
+  const navigation =
+    useNavigation<EditDriverNavigationProp>();
   const route = useRoute();
 
   const {updateDriver} = useDrivers();
@@ -26,26 +66,30 @@ const EditDriverScreen = () => {
     driver: Driver;
   };
 
-  const [name, setName] = useState(driver.name);
-  const [employeeId, setEmployeeId] = useState(
-    driver.employeeId,
-  );
-  const [phone, setPhone] = useState(driver.phone);
-  const [email, setEmail] = useState(driver.email);
+  const [name, setName] =
+    useState(driver.name);
+  const [employeeId, setEmployeeId] =
+    useState(driver.employeeId);
+  const [phone, setPhone] =
+    useState(driver.phone);
+  const [email, setEmail] =
+    useState(driver.email);
   const [licenseNumber, setLicenseNumber] =
     useState(driver.licenseNumber);
   const [licenseExpiry, setLicenseExpiry] =
     useState(driver.licenseExpiry);
 
   const [status, setStatus] =
-    useState<'Active' | 'Inactive' | 'On Leave'>(
+    useState<DriverStatus>(
       driver.status,
     );
 
-  const [assignedVehicleId, setAssignedVehicleId] =
-    useState<string | undefined>(
-      driver.assignedVehicleId,
-    );
+  const [
+    assignedVehicleId,
+    setAssignedVehicleId,
+  ] = useState<string | undefined>(
+    driver.assignedVehicleId,
+  );
 
   const handleSave = () => {
     if (!name.trim()) {
@@ -123,26 +167,150 @@ const EditDriverScreen = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={
+        Platform.OS === 'ios'
+          ? 'padding'
+          : undefined
+      }>
+
+      <View
+        style={[
+          styles.safeAreaTop,
+          {height: insets.top},
+        ]}
+      />
+
       <ScrollView
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[
+          styles.content,
+          {
+            paddingBottom:
+              Math.max(insets.bottom, 20) + 28,
+          },
+        ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}>
-        <View style={styles.header}>
-          <Text style={styles.title}>
-            Edit Driver
-          </Text>
 
-          <Text style={styles.subtitle}>
-            Update driver information
-          </Text>
+        {/* HEADER */}
+
+        <View style={styles.header}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+            onPress={() =>
+              navigation.goBack()
+            }
+            style={({pressed}) => [
+              styles.backButton,
+              pressed && styles.pressed,
+            ]}>
+            <MaterialDesignIcons
+              name="arrow-left"
+              size={20}
+              color="#F5F7FF"
+            />
+          </Pressable>
+
+          <View style={styles.headerText}>
+            <View style={styles.eyebrowRow}>
+              <View style={styles.headerIcon}>
+                <MaterialDesignIcons
+                  name="account-hard-hat-outline"
+                  size={18}
+                  color={DRIVER_TEAL}
+                />
+              </View>
+
+              <Text style={styles.eyebrow}>
+                DRIVER
+              </Text>
+            </View>
+
+            <Text style={styles.title}>
+              Edit Driver
+            </Text>
+
+            <Text style={styles.subtitle}>
+              Update driver information
+            </Text>
+          </View>
         </View>
 
-        <Card>
+        {/* DRIVER CONTEXT */}
+
+        <View style={styles.contextCard}>
+          <View style={styles.contextIcon}>
+            <MaterialDesignIcons
+              name="account-outline"
+              size={21}
+              color={DRIVER_TEAL}
+            />
+          </View>
+
+          <View style={styles.contextText}>
+            <Text
+              style={styles.contextName}
+              numberOfLines={1}>
+              {driver.name}
+            </Text>
+
+            <Text style={styles.contextEmployeeId}>
+              {driver.employeeId}
+            </Text>
+          </View>
+
+          <View
+            style={[
+              styles.contextStatus,
+              {
+                backgroundColor:
+                  `${STATUS_COLORS[driver.status]}14`,
+                borderColor:
+                  `${STATUS_COLORS[driver.status]}28`,
+              },
+            ]}>
+            <View
+              style={[
+                styles.statusDot,
+                {
+                  backgroundColor:
+                    STATUS_COLORS[
+                      driver.status
+                    ],
+                },
+              ]}
+            />
+
+            <Text
+              style={[
+                styles.contextStatusText,
+                {
+                  color:
+                    STATUS_COLORS[
+                      driver.status
+                    ],
+                },
+              ]}>
+              {driver.status}
+            </Text>
+          </View>
+        </View>
+
+        {/* PERSONAL INFORMATION */}
+
+        <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>
             Personal Information
           </Text>
 
+          <Text style={styles.sectionSubtitle}>
+            Keep the driver's identity and contact details current.
+          </Text>
+        </View>
+
+        <Card>
           <Text style={styles.label}>
             Full Name
           </Text>
@@ -152,7 +320,7 @@ const EditDriverScreen = () => {
             value={name}
             onChangeText={setName}
             placeholder="Enter full name"
-            placeholderTextColor="#94A3B8"
+            placeholderTextColor="#6F7892"
             autoCapitalize="words"
           />
 
@@ -165,7 +333,7 @@ const EditDriverScreen = () => {
             value={employeeId}
             onChangeText={setEmployeeId}
             placeholder="e.g. DRV-004"
-            placeholderTextColor="#94A3B8"
+            placeholderTextColor="#6F7892"
             autoCapitalize="characters"
           />
 
@@ -178,7 +346,7 @@ const EditDriverScreen = () => {
             value={phone}
             onChangeText={setPhone}
             placeholder="Enter phone number"
-            placeholderTextColor="#94A3B8"
+            placeholderTextColor="#6F7892"
             keyboardType="phone-pad"
           />
 
@@ -191,17 +359,26 @@ const EditDriverScreen = () => {
             value={email}
             onChangeText={setEmail}
             placeholder="Enter email address"
-            placeholderTextColor="#94A3B8"
+            placeholderTextColor="#6F7892"
             keyboardType="email-address"
             autoCapitalize="none"
+            autoCorrect={false}
           />
         </Card>
 
-        <Card>
+        {/* LICENSE INFORMATION */}
+
+        <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>
             License Information
           </Text>
 
+          <Text style={styles.sectionSubtitle}>
+            Update the licensing details associated with this driver.
+          </Text>
+        </View>
+
+        <Card>
           <Text style={styles.label}>
             License Number
           </Text>
@@ -211,7 +388,7 @@ const EditDriverScreen = () => {
             value={licenseNumber}
             onChangeText={setLicenseNumber}
             placeholder="Enter license number"
-            placeholderTextColor="#94A3B8"
+            placeholderTextColor="#6F7892"
             autoCapitalize="characters"
           />
 
@@ -224,105 +401,271 @@ const EditDriverScreen = () => {
             value={licenseExpiry}
             onChangeText={setLicenseExpiry}
             placeholder="YYYY-MM-DD"
-            placeholderTextColor="#94A3B8"
+            placeholderTextColor="#6F7892"
             keyboardType="numbers-and-punctuation"
           />
         </Card>
 
-        <Card>
+        {/* DRIVER STATUS */}
+
+        <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>
             Driver Status
           </Text>
 
+          <Text style={styles.sectionSubtitle}>
+            Set the current operational state of the driver.
+          </Text>
+        </View>
+
+        <Card>
           <View style={styles.statusOptions}>
             {(
-              ['Active', 'Inactive', 'On Leave'] as const
-            ).map(option => (
-              <TouchableOpacity
-                key={option}
-                style={[
-                  styles.statusOption,
-                  status === option &&
-                    (option === 'Active'
-                      ? styles.activeStatusSelected
-                      : option === 'Inactive'
-                      ? styles.inactiveStatusSelected
-                      : styles.leaveStatusSelected),
-                ]}
-                onPress={() => setStatus(option)}>
-                <Text
-                  style={[
-                    styles.statusOptionText,
-                    status === option &&
-                      (option === 'Active'
-                        ? styles.activeStatusText
-                        : option === 'Inactive'
-                        ? styles.inactiveStatusText
-                        : styles.leaveStatusText),
+              [
+                'Active',
+                'Inactive',
+                'On Leave',
+              ] as DriverStatus[]
+            ).map(option => {
+              const selected =
+                status === option;
+
+              const statusColor =
+                STATUS_COLORS[option];
+
+              return (
+                <Pressable
+                  key={option}
+                  accessibilityRole="radio"
+                  accessibilityState={{
+                    selected,
+                  }}
+                  onPress={() =>
+                    setStatus(option)
+                  }
+                  style={({pressed}) => [
+                    styles.statusOption,
+                    {
+                      borderColor: selected
+                        ? `${statusColor}45`
+                        : '#1B2A40',
+                      backgroundColor:
+                        selected
+                          ? `${statusColor}12`
+                          : '#0D1526',
+                    },
+                    pressed &&
+                      styles.pressed,
                   ]}>
-                  {option}
-                </Text>
-              </TouchableOpacity>
-            ))}
+
+                  <View
+                    style={[
+                      styles.optionDot,
+                      {
+                        backgroundColor:
+                          statusColor,
+                      },
+                    ]}
+                  />
+
+                  <Text
+                    style={[
+                      styles.statusOptionText,
+                      {
+                        color: selected
+                          ? statusColor
+                          : '#9AA4BF',
+                      },
+                    ]}>
+                    {option}
+                  </Text>
+
+                  {selected && (
+                    <MaterialDesignIcons
+                      name="check"
+                      size={16}
+                      color={statusColor}
+                    />
+                  )}
+                </Pressable>
+              );
+            })}
           </View>
         </Card>
 
-        <Card>
+        {/* ASSIGNED VEHICLE */}
+
+        <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>
             Assigned Vehicle
           </Text>
 
-          <TouchableOpacity
-            style={[
-              styles.vehicleOption,
-              assignedVehicleId === undefined &&
-                styles.vehicleOptionSelected,
-            ]}
-            onPress={() =>
-              setAssignedVehicleId(undefined)
-            }>
-            <Text
-              style={[
-                styles.vehicleOptionTitle,
-                assignedVehicleId === undefined &&
-                  styles.vehicleOptionTitleSelected,
-              ]}>
-              No vehicle assigned
-            </Text>
-          </TouchableOpacity>
+          <Text style={styles.sectionSubtitle}>
+            Choose the vehicle currently associated with this driver.
+          </Text>
+        </View>
 
-          {vehicles.map(vehicle => (
-            <TouchableOpacity
-              key={vehicle.id}
+        <Card>
+          <Pressable
+            accessibilityRole="radio"
+            accessibilityState={{
+              selected:
+                assignedVehicleId ===
+                undefined,
+            }}
+            onPress={() =>
+              setAssignedVehicleId(
+                undefined,
+              )
+            }
+            style={({pressed}) => [
+              styles.vehicleOption,
+              assignedVehicleId ===
+                undefined &&
+                styles.vehicleOptionSelected,
+              pressed && styles.pressed,
+            ]}>
+
+            <View
               style={[
-                styles.vehicleOption,
-                assignedVehicleId === vehicle.id &&
-                  styles.vehicleOptionSelected,
-              ]}
-              onPress={() =>
-                setAssignedVehicleId(vehicle.id)
-              }>
+                styles.vehicleOptionIcon,
+                {
+                  backgroundColor:
+                    assignedVehicleId ===
+                    undefined
+                      ? 'rgba(0, 214, 201, 0.10)'
+                      : '#10182B',
+                },
+              ]}>
+              <MaterialDesignIcons
+                name="link-variant-off"
+                size={19}
+                color={
+                  assignedVehicleId ===
+                  undefined
+                    ? DRIVER_TEAL
+                    : '#6F7892'
+                }
+              />
+            </View>
+
+            <View style={styles.vehicleOptionText}>
               <Text
                 style={[
                   styles.vehicleOptionTitle,
-                  assignedVehicleId === vehicle.id &&
+                  assignedVehicleId ===
+                    undefined &&
                     styles.vehicleOptionTitleSelected,
                 ]}>
-                {vehicle.registrationNumber}
+                No vehicle assigned
               </Text>
 
-              <Text style={styles.vehicleOptionSubtitle}>
-                {vehicle.make} {vehicle.model}
+              <Text
+                style={
+                  styles.vehicleOptionSubtitle
+                }>
+                Driver is not currently linked to a vehicle.
               </Text>
-            </TouchableOpacity>
-          ))}
+            </View>
+
+            {assignedVehicleId ===
+              undefined && (
+              <MaterialDesignIcons
+                name="check-circle"
+                size={19}
+                color={DRIVER_TEAL}
+              />
+            )}
+          </Pressable>
+
+          {vehicles.map(vehicle => {
+            const selected =
+              assignedVehicleId ===
+              vehicle.id;
+
+            return (
+              <Pressable
+                key={vehicle.id}
+                accessibilityRole="radio"
+                accessibilityState={{
+                  selected,
+                }}
+                onPress={() =>
+                  setAssignedVehicleId(
+                    vehicle.id,
+                  )
+                }
+                style={({pressed}) => [
+                  styles.vehicleOption,
+                  selected &&
+                    styles.vehicleOptionSelected,
+                  pressed &&
+                    styles.pressed,
+                ]}>
+
+                <View
+                  style={[
+                    styles.vehicleOptionIcon,
+                    {
+                      backgroundColor:
+                        selected
+                          ? 'rgba(22, 136, 255, 0.10)'
+                          : '#10182B',
+                    },
+                  ]}>
+                  <MaterialDesignIcons
+                    name="truck-outline"
+                    size={19}
+                    color={
+                      selected
+                        ? '#1688FF'
+                        : '#6F7892'
+                    }
+                  />
+                </View>
+
+                <View style={styles.vehicleOptionText}>
+                  <Text
+                    style={[
+                      styles.vehicleOptionTitle,
+                      selected &&
+                        styles.vehicleOptionTitleSelected,
+                    ]}
+                    numberOfLines={1}>
+                    {vehicle.registrationNumber}
+                  </Text>
+
+                  <Text
+                    style={
+                      styles.vehicleOptionSubtitle
+                    }
+                    numberOfLines={1}>
+                    {vehicle.make}{' '}
+                    {vehicle.model}
+                  </Text>
+                </View>
+
+                {selected && (
+                  <MaterialDesignIcons
+                    name="check-circle"
+                    size={19}
+                    color="#1688FF"
+                  />
+                )}
+              </Pressable>
+            );
+          })}
         </Card>
+
+        {/* ACTIONS */}
 
         <View style={styles.actions}>
           <View style={styles.actionButton}>
             <Button
               title="Cancel"
-              onPress={() => navigation.goBack()}
+              onPress={() =>
+                navigation.goBack()
+              }
             />
           </View>
 
@@ -334,62 +677,209 @@ const EditDriverScreen = () => {
           </View>
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </KeyboardAvoidingView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#050711',
+  },
+
+  safeAreaTop: {
+    backgroundColor: '#050711',
   },
 
   content: {
-    paddingHorizontal: 20,
-    paddingVertical: 24,
-    paddingBottom: 40,
+    flexGrow: 1,
+    paddingHorizontal: 18,
+    paddingTop: 14,
+  },
+
+  pressed: {
+    opacity: 0.78,
   },
 
   header: {
-    marginBottom: 16,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 18,
+  },
+
+  backButton: {
+    width: 42,
+    height: 42,
+    marginRight: 12,
+    marginTop: 2,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#10182B',
+    borderWidth: 1,
+    borderColor:
+      'rgba(255, 255, 255, 0.08)',
+  },
+
+  headerText: {
+    flex: 1,
+    minWidth: 0,
+  },
+
+  eyebrowRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+
+  headerIcon: {
+    width: 30,
+    height: 30,
+    marginRight: 8,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor:
+      'rgba(0, 214, 201, 0.10)',
+    borderWidth: 1,
+    borderColor:
+      'rgba(0, 214, 201, 0.18)',
+  },
+
+  eyebrow: {
+    fontSize: 10,
+    lineHeight: 14,
+    fontWeight: '700',
+    letterSpacing: 1.1,
+    color: '#6F7892',
   },
 
   title: {
-    fontSize: 30,
+    fontSize: 28,
+    lineHeight: 34,
     fontWeight: '800',
-    color: '#0F172A',
+    letterSpacing: -0.3,
+    color: '#F5F7FF',
   },
 
   subtitle: {
-    marginTop: 6,
-    fontSize: 15,
-    color: '#64748B',
+    marginTop: 4,
+    fontSize: 13,
+    lineHeight: 18,
+    color: '#9AA4BF',
+  },
+
+  contextCard: {
+    minHeight: 78,
+    marginBottom: 20,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 16,
+    backgroundColor:
+      'rgba(18, 24, 46, 0.84)',
+    borderWidth: 1,
+    borderColor:
+      'rgba(255, 255, 255, 0.08)',
+  },
+
+  contextIcon: {
+    width: 44,
+    height: 44,
+    marginRight: 11,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor:
+      'rgba(0, 214, 201, 0.10)',
+    borderWidth: 1,
+    borderColor:
+      'rgba(0, 214, 201, 0.18)',
+  },
+
+  contextText: {
+    flex: 1,
+    minWidth: 0,
+    paddingRight: 10,
+  },
+
+  contextName: {
+    fontSize: 16,
+    lineHeight: 21,
+    fontWeight: '800',
+    color: '#F5F7FF',
+  },
+
+  contextEmployeeId: {
+    marginTop: 3,
+    fontSize: 11,
+    lineHeight: 16,
+    fontWeight: '700',
+    color: DRIVER_TEAL,
+  },
+
+  contextStatus: {
+    maxWidth: 105,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+
+  statusDot: {
+    width: 6,
+    height: 6,
+    marginRight: 5,
+    borderRadius: 3,
+  },
+
+  contextStatusText: {
+    fontSize: 9,
+    lineHeight: 13,
+    fontWeight: '800',
+  },
+
+  sectionHeader: {
+    marginBottom: 8,
   },
 
   sectionTitle: {
-    marginBottom: 16,
-    fontSize: 17,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontSize: 16,
+    lineHeight: 21,
+    fontWeight: '700',
+    color: '#F5F7FF',
+  },
+
+  sectionSubtitle: {
+    marginTop: 4,
+    marginBottom: 8,
+    fontSize: 12,
+    lineHeight: 17,
+    color: '#6F7892',
   },
 
   label: {
     marginBottom: 6,
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#475569',
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: '700',
+    color: '#9AA4BF',
   },
 
   input: {
+    minHeight: 46,
     marginBottom: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingHorizontal: 13,
+    paddingVertical: 11,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 8,
-    backgroundColor: '#FFFFFF',
-    fontSize: 15,
-    color: '#0F172A',
+    borderColor: '#1B2A40',
+    borderRadius: 11,
+    backgroundColor: '#0D1526',
+    fontSize: 14,
+    lineHeight: 19,
+    color: '#F5F7FF',
   },
 
   statusOptions: {
@@ -399,82 +889,88 @@ const styles = StyleSheet.create({
   },
 
   statusOption: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    minHeight: 42,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 11,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 20,
-    backgroundColor: '#FFFFFF',
   },
 
-  activeStatusSelected: {
-    borderColor: '#86EFAC',
-    backgroundColor: '#DCFCE7',
-  },
-
-  inactiveStatusSelected: {
-    borderColor: '#FDE68A',
-    backgroundColor: '#FEF3C7',
-  },
-
-  leaveStatusSelected: {
-    borderColor: '#FCA5A5',
-    backgroundColor: '#FEE2E2',
+  optionDot: {
+    width: 7,
+    height: 7,
+    marginRight: 7,
+    borderRadius: 4,
   },
 
   statusOptionText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-
-  activeStatusText: {
-    color: '#166534',
-  },
-
-  inactiveStatusText: {
-    color: '#92400E',
-  },
-
-  leaveStatusText: {
-    color: '#991B1B',
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: '700',
   },
 
   vehicleOption: {
+    minHeight: 62,
     marginBottom: 8,
-    padding: 14,
+    padding: 11,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 8,
-    backgroundColor: '#FFFFFF',
+    borderColor: '#1B2A40',
+    backgroundColor: '#0D1526',
   },
 
   vehicleOptionSelected: {
-    borderColor: '#2563EB',
-    backgroundColor: '#EFF6FF',
+    borderColor:
+      'rgba(0, 214, 201, 0.24)',
+    backgroundColor:
+      'rgba(0, 214, 201, 0.06)',
+  },
+
+  vehicleOptionIcon: {
+    width: 38,
+    height: 38,
+    marginRight: 10,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor:
+      'rgba(255, 255, 255, 0.05)',
+  },
+
+  vehicleOptionText: {
+    flex: 1,
+    minWidth: 0,
+    paddingRight: 8,
   },
 
   vehicleOptionTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#475569',
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: '800',
+    color: '#CBD3E6',
   },
 
   vehicleOptionTitleSelected: {
-    color: '#2563EB',
+    color: '#F5F7FF',
   },
 
   vehicleOptionSubtitle: {
-    marginTop: 3,
-    fontSize: 12,
-    color: '#64748B',
+    marginTop: 2,
+    fontSize: 10,
+    lineHeight: 15,
+    fontWeight: '600',
+    color: '#6F7892',
   },
 
   actions: {
     flexDirection: 'row',
     marginHorizontal: -4,
-    marginTop: 4,
-    marginBottom: 20,
+    marginTop: 10,
   },
 
   actionButton: {

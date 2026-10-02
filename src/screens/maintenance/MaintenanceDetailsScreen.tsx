@@ -1,17 +1,99 @@
 import React from 'react';
-import {useRoute} from '@react-navigation/native';
+
 import {
-  SafeAreaView,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 
+import {useNavigation, useRoute} from '@react-navigation/native';
+import type {
+  NativeStackNavigationProp,
+} from '@react-navigation/native-stack';
+
+import {
+  SafeAreaView,
+} from 'react-native-safe-area-context';
+
+import {
+  MaterialDesignIcons,
+} from '@react-native-vector-icons/material-design-icons/static';
+
 import {useVehicles} from '../../store';
 import {Maintenance} from '../../types';
+import type {RootStackParamList} from '../../navigation/AppNavigator';
+import {
+  colors,
+  radius,
+  spacing,
+  typography,
+} from '../../theme';
+
+type NavigationProp = NativeStackNavigationProp<
+  RootStackParamList
+>;
+
+type IconName = React.ComponentProps<
+  typeof MaterialDesignIcons
+>['name'];
+
+const ACCENT = colors.categories.maintenance;
+
+const STATUS_COLORS = {
+  completed: colors.success,
+  inProgress: colors.primary,
+  scheduled: colors.warning,
+  fallback: colors.textMuted,
+} as const;
+
+const PRIORITY_COLORS = {
+  high: colors.danger,
+  medium: colors.warning,
+  low: colors.success,
+} as const;
+
+const getStatusColor = (status: string) => {
+  switch (status) {
+    case 'Completed':
+      return STATUS_COLORS.completed;
+    case 'In Progress':
+      return STATUS_COLORS.inProgress;
+    case 'Scheduled':
+      return STATUS_COLORS.scheduled;
+    default:
+      return STATUS_COLORS.fallback;
+  }
+};
+
+const getPriorityColor = (priority: string) => {
+  switch (priority) {
+    case 'High':
+      return PRIORITY_COLORS.high;
+    case 'Medium':
+      return PRIORITY_COLORS.medium;
+    default:
+      return PRIORITY_COLORS.low;
+  }
+};
+
+const alpha = (hex: string, value: string) => `${hex}${value}`;
+
+const formatDate = (date: string) => {
+  return new Date(date).toLocaleDateString(undefined, {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+};
+
+const formatCurrency = (amount: number) => {
+  return `₹${amount.toLocaleString('en-IN')}`;
+};
 
 const MaintenanceDetailsScreen = () => {
+  const navigation = useNavigation<NavigationProp>();
   const route = useRoute();
 
   const {vehicles} = useVehicles();
@@ -24,434 +106,752 @@ const MaintenanceDetailsScreen = () => {
     item => item.id === maintenance.vehicleId,
   );
 
-  const formatDate = (date: string) => {
-    return new Date(date).toLocaleDateString();
-  };
+  const statusColor = getStatusColor(maintenance.status);
+  const priorityColor = getPriorityColor(maintenance.priority);
+
+  const isOverdue =
+    maintenance.status !== 'Completed' &&
+    new Date(maintenance.scheduledDate).getTime() < Date.now();
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView
+      style={styles.container}
+      edges={['top', 'left', 'right', 'bottom']}>
       <ScrollView
         contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}>
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled">
+        <View style={styles.headerRow}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+            onPress={() => navigation.goBack()}
+            style={({pressed}) => [
+              styles.backButton,
+              pressed && styles.pressed,
+            ]}>
+            <MaterialDesignIcons
+              name="arrow-left"
+              size={20}
+              color={colors.textPrimary}
+            />
+          </Pressable>
 
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.title}>
-            Maintenance Details
-          </Text>
+          <View style={styles.headerCopy}>
+            <Text style={styles.eyebrow}>SERVICE RECORD</Text>
+            <Text style={styles.title}>Maintenance Details</Text>
+            <Text style={styles.subtitle}>
+              Complete service history for this record
+            </Text>
+          </View>
 
-          <Text style={styles.subtitle}>
-            View maintenance record information
-          </Text>
+          <View
+            style={[
+              styles.headerIcon,
+              {
+                backgroundColor: alpha(ACCENT, '16'),
+                borderColor: alpha(ACCENT, '38'),
+              },
+            ]}>
+            <MaterialDesignIcons
+              name="wrench-outline"
+              size={20}
+              color={ACCENT}
+            />
+          </View>
         </View>
 
-        {/* Main Maintenance Card */}
-        <View style={styles.glassCard}>
-          <View style={styles.titleRow}>
-            <View style={styles.titleContainer}>
-              <Text style={styles.maintenanceTitle}>
+        <View style={styles.heroCard}>
+          <View style={styles.heroTopRow}>
+            <View style={styles.heroTitleBlock}>
+              <Text style={styles.heroTitle} numberOfLines={3}>
                 {maintenance.title}
               </Text>
 
-              <Text style={styles.vehicleRegistration}>
-                {vehicle?.registrationNumber ??
-                  'Unknown Vehicle'}
-              </Text>
+              <View style={styles.vehicleIdentityRow}>
+                <View style={styles.smallIconBox}>
+                  <MaterialDesignIcons
+                    name="truck-outline"
+                    size={15}
+                    color={colors.textSecondary}
+                  />
+                </View>
+
+                <Text style={styles.vehicleRegistration} numberOfLines={1}>
+                  {vehicle?.registrationNumber ?? 'Unknown Vehicle'}
+                </Text>
+              </View>
             </View>
 
             <View
               style={[
                 styles.statusBadge,
-                maintenance.status === 'Completed'
-                  ? styles.completedBadge
-                  : maintenance.status ===
-                    'In Progress'
-                  ? styles.inProgressBadge
-                  : styles.scheduledBadge,
+                {
+                  backgroundColor: alpha(statusColor, '16'),
+                  borderColor: alpha(statusColor, '35'),
+                },
               ]}>
-              <Text
+              <View
                 style={[
-                  styles.statusText,
-                  maintenance.status === 'Completed'
-                    ? styles.completedText
-                    : maintenance.status ===
-                      'In Progress'
-                    ? styles.inProgressText
-                    : styles.scheduledText,
-                ]}>
+                  styles.statusDot,
+                  {backgroundColor: statusColor},
+                ]}
+              />
+              <Text style={[styles.statusText, {color: statusColor}]}>
                 {maintenance.status}
               </Text>
             </View>
           </View>
-        </View>
 
-        {/* Maintenance Information */}
-        <View style={styles.glassCard}>
-          <Text style={styles.sectionTitle}>
-            Maintenance Information
-          </Text>
+          <View style={styles.heroDivider} />
 
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>
-              Vehicle
-            </Text>
-
-            <Text style={styles.detailValue}>
-              {vehicle
-                ? `${vehicle.registrationNumber} - ${vehicle.make} ${vehicle.model}`
-                : 'Unknown Vehicle'}
-            </Text>
-          </View>
-
-          <View style={styles.separator} />
-
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>
-              Description
-            </Text>
-
-            <Text style={styles.detailValue}>
-              {maintenance.description}
-            </Text>
-          </View>
-
-          <View style={styles.separator} />
-
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>
-              Priority
-            </Text>
-
-            <View
-              style={[
-                styles.priorityBadge,
-                maintenance.priority === 'High'
-                  ? styles.highPriorityBadge
-                  : maintenance.priority === 'Medium'
-                  ? styles.mediumPriorityBadge
-                  : styles.lowPriorityBadge,
-              ]}>
-              <Text
+          <View style={styles.heroBottomRow}>
+            <View style={styles.heroMetric}>
+              <Text style={styles.metricLabel}>PRIORITY</Text>
+              <View
                 style={[
-                  styles.priorityText,
-                  maintenance.priority === 'High'
-                    ? styles.highPriorityText
-                    : maintenance.priority === 'Medium'
-                    ? styles.mediumPriorityText
-                    : styles.lowPriorityText,
+                  styles.priorityPill,
+                  {
+                    backgroundColor: alpha(priorityColor, '14'),
+                    borderColor: alpha(priorityColor, '30'),
+                  },
                 ]}>
-                {maintenance.priority}
+                <View
+                  style={[
+                    styles.priorityDot,
+                    {backgroundColor: priorityColor},
+                  ]}
+                />
+                <Text
+                  style={[
+                    styles.priorityText,
+                    {color: priorityColor},
+                  ]}>
+                  {maintenance.priority}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.heroMetric}>
+              <Text style={styles.metricLabel}>SCHEDULED</Text>
+              <Text style={styles.metricValue}>
+                {formatDate(maintenance.scheduledDate)}
               </Text>
             </View>
+
+            {isOverdue && (
+              <View style={styles.overduePill}>
+                <MaterialDesignIcons
+                  name="alert-circle-outline"
+                  size={14}
+                  color={colors.danger}
+                />
+                <Text style={styles.overdueText}>OVERDUE</Text>
+              </View>
+            )}
           </View>
         </View>
 
-        {/* Schedule */}
-        <View style={styles.glassCard}>
-          <Text style={styles.sectionTitle}>
-            Schedule
-          </Text>
+        <SectionHeader
+          eyebrow="SERVICE"
+          title="Maintenance information"
+        />
 
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>
-              Scheduled Date
-            </Text>
+        <View style={styles.card}>
+          <DetailRow
+            icon="truck-outline"
+            label="Vehicle"
+            value={
+              vehicle
+                ? `${vehicle.registrationNumber} · ${vehicle.make} ${vehicle.model}`
+                : 'Unknown Vehicle'
+            }
+          />
+          <Divider />
+          <DetailRow
+            icon="text-box-outline"
+            label="Description"
+            value={maintenance.description}
+            multiline
+          />
+        </View>
 
-            <Text style={styles.detailValue}>
-              {formatDate(
-                maintenance.scheduledDate,
-              )}
-            </Text>
-          </View>
+        <SectionHeader
+          eyebrow="SCHEDULE"
+          title="Timeline"
+        />
+
+        <View style={styles.card}>
+          <TimelineRow
+            icon="calendar-clock"
+            label="Scheduled date"
+            value={formatDate(maintenance.scheduledDate)}
+            color={ACCENT}
+          />
 
           {maintenance.completedDate && (
             <>
-              <View style={styles.separator} />
-
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>
-                  Completed Date
-                </Text>
-
-                <Text style={styles.detailValue}>
-                  {formatDate(
-                    maintenance.completedDate,
-                  )}
-                </Text>
-              </View>
+              <Divider />
+              <TimelineRow
+                icon="check-circle-outline"
+                label="Completed date"
+                value={formatDate(maintenance.completedDate)}
+                color={colors.success}
+              />
             </>
           )}
         </View>
 
-        {/* Vehicle Metrics */}
-        <View style={styles.glassCard}>
-          <Text style={styles.sectionTitle}>
-            Vehicle Metrics
-          </Text>
+        <SectionHeader
+          eyebrow="VEHICLE"
+          title="Service metrics"
+        />
 
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>
-              Mileage
-            </Text>
+        <View style={styles.metricsCard}>
+          <MetricTile
+            icon="counter"
+            label="Mileage"
+            value={
+              maintenance.mileage !== undefined
+                ? `${maintenance.mileage.toLocaleString('en-IN')} km`
+                : 'Not provided'
+            }
+            color={colors.primary}
+          />
 
-            <Text style={styles.detailValue}>
-              {maintenance.mileage !== undefined
-                ? `${maintenance.mileage.toLocaleString()} km`
-                : 'Not provided'}
-            </Text>
-          </View>
+          <View style={styles.metricsDivider} />
 
-          <View style={styles.separator} />
-
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>
-              Cost
-            </Text>
-
-            <Text style={styles.costValue}>
-              {maintenance.cost !== undefined
-                ? `₹${maintenance.cost.toLocaleString()}`
-                : 'Not provided'}
-            </Text>
-          </View>
+          <MetricTile
+            icon="cash-outline"
+            label="Maintenance cost"
+            value={
+              maintenance.cost !== undefined
+                ? formatCurrency(maintenance.cost)
+                : 'Not provided'
+            }
+            color={ACCENT}
+          />
         </View>
 
-        {/* Record Information */}
-        <View style={styles.glassCard}>
-          <Text style={styles.sectionTitle}>
-            Record Information
-          </Text>
+        <SectionHeader
+          eyebrow="RECORD"
+          title="Record information"
+        />
 
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>
-              Record ID
-            </Text>
-
-            <Text style={styles.detailValueSmall}>
-              {maintenance.id}
-            </Text>
-          </View>
-
-          <View style={styles.separator} />
-
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>
-              Created
-            </Text>
-
-            <Text style={styles.detailValue}>
-              {formatDate(maintenance.createdAt)}
-            </Text>
-          </View>
+        <View style={styles.card}>
+          <DetailRow
+            icon="identifier"
+            label="Record ID"
+            value={maintenance.id}
+          />
+          <Divider />
+          <DetailRow
+            icon="clock-outline"
+            label="Created"
+            value={formatDate(maintenance.createdAt)}
+          />
         </View>
 
+        <View style={styles.bottomSpacer} />
       </ScrollView>
     </SafeAreaView>
   );
 };
 
+type SectionHeaderProps = {
+  eyebrow: string;
+  title: string;
+};
+
+const SectionHeader = ({eyebrow, title}: SectionHeaderProps) => (
+  <View style={styles.sectionHeader}>
+    <Text style={styles.sectionEyebrow}>{eyebrow}</Text>
+    <Text style={styles.sectionTitle}>{title}</Text>
+  </View>
+);
+
+type DetailRowProps = {
+  icon: IconName;
+  label: string;
+  value: string;
+  multiline?: boolean;
+};
+
+const DetailRow = ({
+  icon,
+  label,
+  value,
+  multiline = false,
+}: DetailRowProps) => (
+  <View style={styles.detailRow}>
+    <View style={styles.detailIconBox}>
+      <MaterialDesignIcons
+        name={icon}
+        size={17}
+        color={colors.textSecondary}
+      />
+    </View>
+
+    <View style={styles.detailCopy}>
+      <Text style={styles.detailLabel}>{label}</Text>
+      <Text
+        style={styles.detailValue}
+        numberOfLines={multiline ? undefined : 3}>
+        {value}
+      </Text>
+    </View>
+  </View>
+);
+
+type TimelineRowProps = {
+  icon: IconName;
+  label: string;
+  value: string;
+  color: string;
+};
+
+const TimelineRow = ({
+  icon,
+  label,
+  value,
+  color,
+}: TimelineRowProps) => (
+  <View style={styles.timelineRow}>
+    <View
+      style={[
+        styles.timelineIcon,
+        {
+          backgroundColor: alpha(color, '14'),
+          borderColor: alpha(color, '2A'),
+        },
+      ]}>
+      <MaterialDesignIcons
+        name={icon}
+        size={17}
+        color={color}
+      />
+    </View>
+
+    <View style={styles.timelineCopy}>
+      <Text style={styles.detailLabel}>{label}</Text>
+      <Text style={styles.detailValue}>{value}</Text>
+    </View>
+  </View>
+);
+
+type MetricTileProps = {
+  icon: IconName;
+  label: string;
+  value: string;
+  color: string;
+};
+
+const MetricTile = ({
+  icon,
+  label,
+  value,
+  color,
+}: MetricTileProps) => (
+  <View style={styles.metricTile}>
+    <View
+      style={[
+        styles.metricIconBox,
+        {
+          backgroundColor: alpha(color, '14'),
+          borderColor: alpha(color, '28'),
+        },
+      ]}>
+      <MaterialDesignIcons
+        name={icon}
+        size={18}
+        color={color}
+      />
+    </View>
+
+    <View style={styles.metricTileCopy}>
+      <Text style={styles.metricLabel}>{label}</Text>
+      <Text style={styles.metricTileValue} numberOfLines={1}>
+        {value}
+      </Text>
+    </View>
+  </View>
+);
+
+const Divider = () => <View style={styles.divider} />;
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#EEF4FA',
+    backgroundColor: colors.background,
   },
 
   content: {
-    paddingHorizontal: 18,
-    paddingTop: 24,
-    paddingBottom: 40,
+    paddingHorizontal: spacing.screen,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xxxl,
   },
 
-  header: {
-    marginBottom: 20,
-    paddingHorizontal: 4,
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.lg,
+  },
+
+  backButton: {
+    width: spacing.touch,
+    height: spacing.touch,
+    borderRadius: radius.button,
+    backgroundColor: colors.surfaceStrong,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.sm,
+  },
+
+  headerCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+
+  eyebrow: {
+    color: colors.textMuted,
+    fontSize: typography.size.xs,
+    lineHeight: typography.lineHeight.xs,
+    fontWeight: typography.weight.bold,
+    letterSpacing: typography.letterSpacing.wide,
   },
 
   title: {
-    fontSize: 30,
-    fontWeight: '800',
-    color: '#0F172A',
+    marginTop: 2,
+    color: colors.textPrimary,
+    fontSize: typography.size.xl,
+    lineHeight: typography.lineHeight.xl,
+    fontWeight: typography.weight.bold,
+    letterSpacing: typography.letterSpacing.tight,
   },
 
   subtitle: {
-    marginTop: 6,
-    fontSize: 14,
-    color: '#64748B',
+    marginTop: 2,
+    color: colors.textSecondary,
+    fontSize: typography.size.sm,
+    lineHeight: typography.lineHeight.sm,
+    fontWeight: typography.weight.medium,
   },
 
-  /*
-   * Liquid glass card
-   */
-  glassCard: {
-    marginBottom: 14,
-    padding: 18,
-    borderRadius: 18,
-
-    backgroundColor: 'rgba(255, 255, 255, 0.88)',
-
+  headerIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.95)',
-
-    shadowColor: '#64748B',
-    shadowOffset: {
-      width: 0,
-      height: 5,
-    },
-    shadowOpacity: 0.12,
-    shadowRadius: 12,
-
-    elevation: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: spacing.sm,
   },
 
-  titleRow: {
+  heroCard: {
+    padding: spacing.card,
+    backgroundColor: colors.surface,
+    borderRadius: radius.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: spacing.section,
+  },
+
+  heroTopRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    justifyContent: 'space-between',
   },
 
-  titleContainer: {
+  heroTitleBlock: {
     flex: 1,
-    paddingRight: 12,
+    minWidth: 0,
+    paddingRight: spacing.sm,
   },
 
-  maintenanceTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#0F172A',
+  heroTitle: {
+    color: colors.textPrimary,
+    fontSize: typography.size.xl,
+    lineHeight: typography.lineHeight.xl,
+    fontWeight: typography.weight.bold,
+    letterSpacing: typography.letterSpacing.tight,
+  },
+
+  vehicleIdentityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: spacing.sm,
+    minWidth: 0,
+  },
+
+  smallIconBox: {
+    width: 26,
+    height: 26,
+    borderRadius: radius.sm,
+    backgroundColor: colors.surfaceStrong,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.sm,
   },
 
   vehicleRegistration: {
-    marginTop: 6,
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#2563EB',
+    flex: 1,
+    minWidth: 0,
+    color: colors.textSoft,
+    fontSize: typography.size.sm,
+    lineHeight: typography.lineHeight.sm,
+    fontWeight: typography.weight.semiBold,
   },
 
-  /*
-   * Status
-   */
   statusBadge: {
-    paddingHorizontal: 11,
-    paddingVertical: 7,
-    borderRadius: 20,
+    minHeight: 30,
+    maxWidth: 120,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
 
-  completedBadge: {
-    backgroundColor: '#DCFCE7',
-  },
-
-  inProgressBadge: {
-    backgroundColor: '#DBEAFE',
-  },
-
-  scheduledBadge: {
-    backgroundColor: '#FEF3C7',
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginRight: 6,
   },
 
   statusText: {
-    fontSize: 11,
-    fontWeight: '800',
+    fontSize: typography.size.xs,
+    lineHeight: typography.lineHeight.xs,
+    fontWeight: typography.weight.bold,
   },
 
-  completedText: {
-    color: '#166534',
-  },
-
-  inProgressText: {
-    color: '#1D4ED8',
-  },
-
-  scheduledText: {
-    color: '#92400E',
-  },
-
-  /*
-   * Sections
-   */
-  sectionTitle: {
-    marginBottom: 18,
-    fontSize: 17,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-
-  detailRow: {
-    marginBottom: 2,
-  },
-
-  detailLabel: {
-    marginBottom: 6,
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-
-  detailValue: {
-    fontSize: 15,
-    lineHeight: 21,
-    fontWeight: '600',
-    color: '#0F172A',
-  },
-
-  detailValueSmall: {
-    fontSize: 13,
-    lineHeight: 19,
-    fontWeight: '600',
-    color: '#334155',
-  },
-
-  separator: {
+  heroDivider: {
     height: 1,
-    marginVertical: 15,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: colors.borderLight,
+    marginVertical: spacing.md,
   },
 
-  /*
-   * Priority
-   */
-  priorityBadge: {
+  heroBottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+
+  heroMetric: {
+    flex: 1,
+    minWidth: 118,
+  },
+
+  metricLabel: {
+    color: colors.textMuted,
+    fontSize: typography.size.xs,
+    lineHeight: typography.lineHeight.xs,
+    fontWeight: typography.weight.bold,
+    letterSpacing: typography.letterSpacing.wide,
+  },
+
+  metricValue: {
+    marginTop: 3,
+    color: colors.textPrimary,
+    fontSize: typography.size.md,
+    lineHeight: typography.lineHeight.md,
+    fontWeight: typography.weight.semiBold,
+  },
+
+  priorityPill: {
     alignSelf: 'flex-start',
-    paddingHorizontal: 11,
-    paddingVertical: 7,
-    borderRadius: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.sm,
+    minHeight: 28,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    marginTop: 3,
   },
 
-  highPriorityBadge: {
-    backgroundColor: '#FEE2E2',
-  },
-
-  mediumPriorityBadge: {
-    backgroundColor: '#FEF3C7',
-  },
-
-  lowPriorityBadge: {
-    backgroundColor: '#DCFCE7',
+  priorityDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginRight: 6,
   },
 
   priorityText: {
-    fontSize: 12,
-    fontWeight: '800',
+    fontSize: typography.size.xs,
+    lineHeight: typography.lineHeight.xs,
+    fontWeight: typography.weight.bold,
   },
 
-  highPriorityText: {
-    color: '#991B1B',
+  overduePill: {
+    minHeight: 28,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.md,
+    backgroundColor: colors.dangerSoft,
+    borderWidth: 1,
+    borderColor: colors.dangerSoft,
   },
 
-  mediumPriorityText: {
-    color: '#92400E',
+  overdueText: {
+    marginLeft: 5,
+    color: colors.danger,
+    fontSize: typography.size.xs,
+    lineHeight: typography.lineHeight.xs,
+    fontWeight: typography.weight.bold,
+    letterSpacing: typography.letterSpacing.wide,
   },
 
-  lowPriorityText: {
-    color: '#166534',
+  sectionHeader: {
+    marginBottom: spacing.sm,
   },
 
-  /*
-   * Cost
-   */
-  costValue: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#2563EB',
+  sectionEyebrow: {
+    color: colors.textMuted,
+    fontSize: typography.size.xs,
+    lineHeight: typography.lineHeight.xs,
+    fontWeight: typography.weight.bold,
+    letterSpacing: typography.letterSpacing.wide,
+  },
+
+  sectionTitle: {
+    marginTop: 2,
+    color: colors.textPrimary,
+    fontSize: typography.size.lg,
+    lineHeight: typography.lineHeight.lg,
+    fontWeight: typography.weight.semiBold,
+  },
+
+  card: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.card,
+    paddingHorizontal: spacing.card,
+    paddingVertical: spacing.md,
+    marginBottom: spacing.section,
+  },
+
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    minWidth: 0,
+  },
+
+  detailIconBox: {
+    width: 34,
+    height: 34,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceStrong,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.sm,
+  },
+
+  detailCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+
+  detailLabel: {
+    color: colors.textMuted,
+    fontSize: typography.size.xs,
+    lineHeight: typography.lineHeight.xs,
+    fontWeight: typography.weight.semiBold,
+    letterSpacing: typography.letterSpacing.wide,
+  },
+
+  detailValue: {
+    marginTop: 4,
+    color: colors.textSoft,
+    fontSize: typography.size.md,
+    lineHeight: typography.lineHeight.md,
+    fontWeight: typography.weight.medium,
+  },
+
+  divider: {
+    height: 1,
+    backgroundColor: colors.borderLight,
+    marginVertical: spacing.md,
+  },
+
+  timelineRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minWidth: 0,
+  },
+
+  timelineIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.sm,
+  },
+
+  timelineCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+
+  metricsCard: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.card,
+    padding: spacing.card,
+    marginBottom: spacing.section,
+  },
+
+  metricTile: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minWidth: 0,
+  },
+
+  metricIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.sm,
+  },
+
+  metricTileCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+
+  metricTileValue: {
+    marginTop: 3,
+    color: colors.textPrimary,
+    fontSize: typography.size.lg,
+    lineHeight: typography.lineHeight.lg,
+    fontWeight: typography.weight.semiBold,
+  },
+
+  metricsDivider: {
+    height: 1,
+    backgroundColor: colors.borderLight,
+    marginVertical: spacing.md,
+  },
+
+  bottomSpacer: {
+    height: spacing.xxxl,
+  },
+
+  pressed: {
+    opacity: 0.68,
   },
 });
 

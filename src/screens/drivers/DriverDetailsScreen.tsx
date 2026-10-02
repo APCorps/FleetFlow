@@ -1,16 +1,47 @@
 import React from 'react';
-import {useRoute} from '@react-navigation/native';
+
 import {
-  SafeAreaView,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 
+import {
+  useNavigation,
+  useRoute,
+} from '@react-navigation/native';
+
+import type {
+  NativeStackNavigationProp,
+} from '@react-navigation/native-stack';
+
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
+
+import {
+  MaterialDesignIcons,
+} from '@react-native-vector-icons/material-design-icons/static';
+
+import type {
+  RootStackParamList,
+} from '../../navigation/AppNavigator';
+
 import {Driver} from '../../types';
 
+type DriverDetailsNavigationProp =
+  NativeStackNavigationProp<
+    RootStackParamList
+  >;
+
+const DRIVER_TEAL = '#00D6C9';
+
 const DriverDetailsScreen = () => {
+  const insets = useSafeAreaInsets();
+
+  const navigation =
+    useNavigation<DriverDetailsNavigationProp>();
+
   const route = useRoute();
 
   const {driver} = route.params as {
@@ -21,303 +52,535 @@ const DriverDetailsScreen = () => {
     return new Date(date).toLocaleDateString();
   };
 
-  const getStatusBadgeStyle = () => {
+  const getStatusColor = () => {
     switch (driver.status) {
       case 'Active':
-        return styles.activeBadge;
+        return '#00D6C9';
 
       case 'On Leave':
-        return styles.leaveBadge;
+        return '#EF4444';
 
       default:
-        return styles.inactiveBadge;
+        return '#F59E0B';
     }
   };
 
-  const getStatusTextStyle = () => {
-    switch (driver.status) {
-      case 'Active':
-        return styles.activeText;
-
-      case 'On Leave':
-        return styles.leaveText;
-
-      default:
-        return styles.inactiveText;
-    }
-  };
+  const statusColor = getStatusColor();
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
+      <View
+        style={[
+          styles.safeAreaTop,
+          {
+            height: insets.top,
+          },
+        ]}
+      />
+
       <ScrollView
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[
+          styles.content,
+          {
+            paddingBottom:
+              Math.max(insets.bottom, 20) + 24,
+          },
+        ]}
         showsVerticalScrollIndicator={false}>
 
-        {/* Header */}
+        {/* HEADER */}
+
         <View style={styles.header}>
-          <Text style={styles.title}>
-            Driver Details
-          </Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+            onPress={() => navigation.goBack()}
+            style={({pressed}) => [
+              styles.backButton,
+              pressed && styles.pressed,
+            ]}>
+            <MaterialDesignIcons
+              name="arrow-left"
+              size={20}
+              color="#F5F7FF"
+            />
+          </Pressable>
 
-          <Text style={styles.subtitle}>
-            View driver information
-          </Text>
-        </View>
+          <View style={styles.headerText}>
+            <View style={styles.eyebrowRow}>
+              <View style={styles.headerIcon}>
+                <MaterialDesignIcons
+                  name="account-hard-hat-outline"
+                  size={18}
+                  color={DRIVER_TEAL}
+                />
+              </View>
 
-        {/* Driver Summary */}
-        <View style={styles.glassCard}>
-          <View style={styles.driverHeader}>
-            <View style={styles.identity}>
-              <Text style={styles.driverName}>
-                {driver.name}
-              </Text>
-
-              <Text style={styles.employeeId}>
-                {driver.employeeId}
-              </Text>
-            </View>
-
-            <View
-              style={[
-                styles.statusBadge,
-                getStatusBadgeStyle(),
-              ]}>
-              <Text
-                style={[
-                  styles.statusText,
-                  getStatusTextStyle(),
-                ]}>
-                {driver.status}
+              <Text style={styles.eyebrow}>
+                DRIVER
               </Text>
             </View>
+
+            <Text style={styles.title}>
+              Driver Details
+            </Text>
+
+            <Text style={styles.subtitle}>
+              View driver information
+            </Text>
           </View>
         </View>
 
-        {/* Contact Information */}
-        <View style={styles.glassCard}>
+        {/* DRIVER SUMMARY */}
+
+        <View style={styles.summaryCard}>
+          <View style={styles.summaryIcon}>
+            <MaterialDesignIcons
+              name="account-outline"
+              size={25}
+              color={statusColor}
+            />
+          </View>
+
+          <View style={styles.identity}>
+            <Text
+              style={styles.driverName}
+              numberOfLines={1}>
+              {driver.name}
+            </Text>
+
+            <Text style={styles.employeeId}>
+              {driver.employeeId}
+            </Text>
+          </View>
+
+          <View
+            style={[
+              styles.statusBadge,
+              {
+                backgroundColor:
+                  `${statusColor}14`,
+                borderColor:
+                  `${statusColor}28`,
+              },
+            ]}>
+            <View
+              style={[
+                styles.statusDot,
+                {
+                  backgroundColor:
+                    statusColor,
+                },
+              ]}
+            />
+
+            <Text
+              style={[
+                styles.statusText,
+                {
+                  color: statusColor,
+                },
+              ]}>
+              {driver.status}
+            </Text>
+          </View>
+        </View>
+
+        {/* CONTACT INFORMATION */}
+
+        <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>
             Contact Information
           </Text>
 
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>
-              Phone
-            </Text>
+          <Text style={styles.sectionSubtitle}>
+            Primary contact details for this driver.
+          </Text>
+        </View>
 
-            <Text style={styles.detailValue}>
-              {driver.phone}
-            </Text>
+        <View style={styles.detailCard}>
+          <View style={styles.detailRow}>
+            <View style={styles.detailIcon}>
+              <MaterialDesignIcons
+                name="phone-outline"
+                size={18}
+                color={DRIVER_TEAL}
+              />
+            </View>
+
+            <View style={styles.detailTextBlock}>
+              <Text style={styles.detailLabel}>
+                Phone
+              </Text>
+
+              <Text style={styles.detailValue}>
+                {driver.phone}
+              </Text>
+            </View>
           </View>
 
           <View style={styles.separator} />
 
           <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>
-              Employee ID
-            </Text>
+            <View style={styles.detailIcon}>
+              <MaterialDesignIcons
+                name="badge-account-outline"
+                size={18}
+                color={DRIVER_TEAL}
+              />
+            </View>
 
-            <Text style={styles.detailValue}>
-              {driver.employeeId}
-            </Text>
+            <View style={styles.detailTextBlock}>
+              <Text style={styles.detailLabel}>
+                Employee ID
+              </Text>
+
+              <Text style={styles.detailValue}>
+                {driver.employeeId}
+              </Text>
+            </View>
           </View>
         </View>
 
-        {/* License Information */}
-        <View style={styles.glassCard}>
+        {/* LICENSE INFORMATION */}
+
+        <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>
             License Information
           </Text>
 
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>
-              License Number
-            </Text>
+          <Text style={styles.sectionSubtitle}>
+            Licensing details associated with the driver.
+          </Text>
+        </View>
 
-            <Text style={styles.detailValue}>
-              {driver.licenseNumber}
-            </Text>
+        <View style={styles.detailCard}>
+          <View style={styles.detailRow}>
+            <View style={styles.detailIcon}>
+              <MaterialDesignIcons
+                name="card-account-details-outline"
+                size={18}
+                color={DRIVER_TEAL}
+              />
+            </View>
+
+            <View style={styles.detailTextBlock}>
+              <Text style={styles.detailLabel}>
+                License Number
+              </Text>
+
+              <Text style={styles.detailValue}>
+                {driver.licenseNumber}
+              </Text>
+            </View>
           </View>
 
           <View style={styles.separator} />
 
           <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>
-              License Expiry
-            </Text>
+            <View style={styles.detailIcon}>
+              <MaterialDesignIcons
+                name="calendar-clock-outline"
+                size={18}
+                color={DRIVER_TEAL}
+              />
+            </View>
 
-            <Text style={styles.detailValue}>
-              {formatDate(
-                driver.licenseExpiry,
-              )}
-            </Text>
+            <View style={styles.detailTextBlock}>
+              <Text style={styles.detailLabel}>
+                License Expiry
+              </Text>
+
+              <Text style={styles.detailValue}>
+                {formatDate(
+                  driver.licenseExpiry,
+                )}
+              </Text>
+            </View>
           </View>
         </View>
 
-        {/* Record Information */}
-        <View style={styles.glassCard}>
+        {/* RECORD INFORMATION */}
+
+        <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>
             Record Information
           </Text>
 
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>
-              Record ID
-            </Text>
+          <Text style={styles.sectionSubtitle}>
+            System information for this driver record.
+          </Text>
+        </View>
 
-            <Text style={styles.detailValueSmall}>
-              {driver.id}
-            </Text>
+        <View style={styles.detailCard}>
+          <View style={styles.detailRow}>
+            <View style={styles.detailIcon}>
+              <MaterialDesignIcons
+                name="identifier"
+                size={18}
+                color={DRIVER_TEAL}
+              />
+            </View>
+
+            <View style={styles.detailTextBlock}>
+              <Text style={styles.detailLabel}>
+                Record ID
+              </Text>
+
+              <Text
+                style={styles.detailValueSmall}
+                selectable>
+                {driver.id}
+              </Text>
+            </View>
           </View>
         </View>
 
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#EEF4FA',
+    backgroundColor: '#050711',
+  },
+
+  safeAreaTop: {
+    backgroundColor: '#050711',
   },
 
   content: {
+    flexGrow: 1,
     paddingHorizontal: 18,
-    paddingTop: 24,
-    paddingBottom: 40,
+    paddingTop: 14,
+  },
+
+  pressed: {
+    opacity: 0.78,
   },
 
   header: {
-    marginBottom: 20,
-    paddingHorizontal: 4,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 18,
+  },
+
+  backButton: {
+    width: 42,
+    height: 42,
+    marginRight: 12,
+    marginTop: 2,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#10182B',
+    borderWidth: 1,
+    borderColor:
+      'rgba(255, 255, 255, 0.08)',
+  },
+
+  headerText: {
+    flex: 1,
+    minWidth: 0,
+  },
+
+  eyebrowRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+
+  headerIcon: {
+    width: 30,
+    height: 30,
+    marginRight: 8,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor:
+      'rgba(0, 214, 201, 0.10)',
+    borderWidth: 1,
+    borderColor:
+      'rgba(0, 214, 201, 0.18)',
+  },
+
+  eyebrow: {
+    fontSize: 10,
+    lineHeight: 14,
+    fontWeight: '700',
+    letterSpacing: 1.1,
+    color: '#6F7892',
   },
 
   title: {
-    fontSize: 30,
+    fontSize: 28,
+    lineHeight: 34,
     fontWeight: '800',
-    color: '#0F172A',
+    letterSpacing: -0.3,
+    color: '#F5F7FF',
   },
 
   subtitle: {
-    marginTop: 6,
-    fontSize: 14,
-    color: '#64748B',
+    marginTop: 4,
+    fontSize: 13,
+    lineHeight: 18,
+    color: '#9AA4BF',
   },
 
-  glassCard: {
-    marginBottom: 14,
-    padding: 18,
-    borderRadius: 18,
+  summaryCard: {
+    minHeight: 82,
+    marginBottom: 20,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 16,
     backgroundColor:
-      'rgba(255, 255, 255, 0.88)',
+      'rgba(18, 24, 46, 0.84)',
     borderWidth: 1,
     borderColor:
-      'rgba(255, 255, 255, 0.95)',
-    shadowColor: '#64748B',
-    shadowOffset: {
-      width: 0,
-      height: 5,
-    },
-    shadowOpacity: 0.12,
-    shadowRadius: 12,
-    elevation: 4,
+      'rgba(255, 255, 255, 0.08)',
   },
 
-  driverHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+  summaryIcon: {
+    width: 46,
+    height: 46,
+    marginRight: 11,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor:
+      'rgba(0, 214, 201, 0.10)',
+    borderWidth: 1,
+    borderColor:
+      'rgba(0, 214, 201, 0.20)',
   },
 
   identity: {
     flex: 1,
-    paddingRight: 12,
+    minWidth: 0,
+    paddingRight: 10,
   },
 
   driverName: {
-    fontSize: 22,
+    fontSize: 18,
+    lineHeight: 23,
     fontWeight: '800',
-    color: '#0F172A',
+    color: '#F5F7FF',
   },
 
   employeeId: {
-    marginTop: 5,
-    fontSize: 14,
+    marginTop: 3,
+    fontSize: 12,
+    lineHeight: 17,
     fontWeight: '700',
-    color: '#2563EB',
+    color: DRIVER_TEAL,
   },
 
   statusBadge: {
-    paddingHorizontal: 11,
-    paddingVertical: 7,
-    borderRadius: 20,
+    maxWidth: 105,
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 999,
+    borderWidth: 1,
   },
 
-  activeBadge: {
-    backgroundColor: '#DCFCE7',
-  },
-
-  leaveBadge: {
-    backgroundColor: '#FEE2E2',
-  },
-
-  inactiveBadge: {
-    backgroundColor: '#FEF3C7',
+  statusDot: {
+    width: 6,
+    height: 6,
+    marginRight: 6,
+    borderRadius: 3,
   },
 
   statusText: {
-    fontSize: 11,
+    fontSize: 9,
+    lineHeight: 13,
     fontWeight: '800',
   },
 
-  activeText: {
-    color: '#166534',
-  },
-
-  leaveText: {
-    color: '#991B1B',
-  },
-
-  inactiveText: {
-    color: '#92400E',
+  sectionHeader: {
+    marginBottom: 8,
   },
 
   sectionTitle: {
-    marginBottom: 18,
-    fontSize: 17,
-    fontWeight: '800',
-    color: '#0F172A',
+    fontSize: 16,
+    lineHeight: 21,
+    fontWeight: '700',
+    color: '#F5F7FF',
+  },
+
+  sectionSubtitle: {
+    marginTop: 4,
+    marginBottom: 8,
+    fontSize: 12,
+    lineHeight: 17,
+    color: '#6F7892',
+  },
+
+  detailCard: {
+    marginBottom: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 4,
+    borderRadius: 16,
+    backgroundColor: '#0B1423',
+    borderWidth: 1,
+    borderColor: '#16263B',
   },
 
   detailRow: {
-    marginBottom: 2,
+    minHeight: 60,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  detailIcon: {
+    width: 38,
+    height: 38,
+    marginRight: 11,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor:
+      'rgba(0, 214, 201, 0.08)',
+    borderWidth: 1,
+    borderColor:
+      'rgba(0, 214, 201, 0.14)',
+  },
+
+  detailTextBlock: {
+    flex: 1,
+    minWidth: 0,
   },
 
   detailLabel: {
-    marginBottom: 6,
-    fontSize: 12,
+    marginBottom: 3,
+    fontSize: 10,
+    lineHeight: 14,
     fontWeight: '600',
-    color: '#64748B',
+    color: '#6F7892',
   },
 
   detailValue: {
-    fontSize: 15,
-    lineHeight: 21,
+    fontSize: 14,
+    lineHeight: 20,
     fontWeight: '600',
-    color: '#0F172A',
+    color: '#CBD3E6',
   },
 
   detailValueSmall: {
-    fontSize: 13,
-    lineHeight: 19,
+    fontSize: 12,
+    lineHeight: 18,
     fontWeight: '600',
-    color: '#334155',
+    color: '#9AA4BF',
   },
 
   separator: {
     height: 1,
-    marginVertical: 15,
-    backgroundColor: '#E2E8F0',
+    backgroundColor:
+      'rgba(255, 255, 255, 0.06)',
   },
 });
 

@@ -1,4 +1,5 @@
 import React, {useState} from 'react';
+
 import {
   Alert,
   KeyboardAvoidingView,
@@ -9,17 +10,29 @@ import {
   View,
 } from 'react-native';
 
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
+
+import MaterialDesignIcons from
+  '@react-native-vector-icons/material-design-icons/static';
+
 import {Button, Card, Input} from '../../components';
-import {VehicleType} from '../../types';
 import {useVehicles} from '../../store';
+import {VehicleType} from '../../types';
+
+const VEHICLE_BLUE = '#1688FF';
 
 const AddVehicleScreen = () => {
+  const insets = useSafeAreaInsets();
+
   const {addVehicle} = useVehicles();
-  const [registrationNumber, setRegistrationNumber] = useState('');
+
+  const [registrationNumber, setRegistrationNumber] =
+    useState('');
   const [make, setMake] = useState('');
   const [model, setModel] = useState('');
   const [year, setYear] = useState('');
-  const [type, setType] = useState<VehicleType>('Truck');
+  const [type, setType] =
+    useState<VehicleType>('Truck');
   const [mileage, setMileage] = useState('');
 
   const handleSave = () => {
@@ -90,42 +103,94 @@ const AddVehicleScreen = () => {
     }
 
     const newVehicle = {
-        id: `vehicle-${Date.now()}`,
-        registrationNumber: registrationNumber.trim().toUpperCase(),
-        make: make.trim(),
-        model: model.trim(),
-        year: numericYear,
-        type,
-        status: 'Active' as const,
-        mileage: numericMileage,
-        createdAt: new Date().toISOString(),
-};
+      id: `vehicle-${Date.now()}`,
+      registrationNumber:
+        registrationNumber.trim().toUpperCase(),
+      make: make.trim(),
+      model: model.trim(),
+      year: numericYear,
+      type,
+      status: 'Active' as const,
+      mileage: numericMileage,
+      createdAt: new Date().toISOString(),
+    };
 
-addVehicle(newVehicle);
+    addVehicle(newVehicle);
 
-Alert.alert(
-  'Vehicle Added',
-  `${newVehicle.registrationNumber} has been added successfully.`,
-);
+    Alert.alert(
+      'Vehicle Added',
+      `${newVehicle.registrationNumber} has been added successfully.`,
+    );
   };
 
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      behavior={
+        Platform.OS === 'ios'
+          ? 'padding'
+          : undefined
+      }>
+
+      <View
+        style={[
+          styles.safeAreaTop,
+          {
+            height: insets.top,
+          },
+        ]}
+      />
+
       <ScrollView
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[
+          styles.content,
+          {
+            paddingBottom:
+              Math.max(insets.bottom, 20) + 24,
+          },
+        ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Add Vehicle</Text>
 
-          <Text style={styles.subtitle}>
-            Enter the vehicle information below
-          </Text>
+        {/* HEADER */}
+
+        <View style={styles.header}>
+          <View style={styles.headerIcon}>
+            <MaterialDesignIcons
+              name="truck-plus-outline"
+              size={22}
+              color={VEHICLE_BLUE}
+            />
+          </View>
+
+          <View style={styles.headerText}>
+            <Text style={styles.eyebrow}>
+              FLEET SETUP
+            </Text>
+
+            <Text style={styles.title}>
+              Add Vehicle
+            </Text>
+
+            <Text style={styles.subtitle}>
+              Enter the vehicle information below
+            </Text>
+          </View>
         </View>
 
+        {/* FORM */}
+
         <Card>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>
+              Vehicle Information
+            </Text>
+
+            <Text style={styles.sectionSubtitle}>
+              Add the core details used across your fleet records.
+            </Text>
+          </View>
+
           <Input
             label="Registration Number"
             placeholder="e.g. FL-025"
@@ -160,7 +225,9 @@ Alert.alert(
             label="Vehicle Type"
             placeholder="Truck, Van, Car..."
             value={type}
-            onChangeText={value => setType(value as VehicleType)}
+            onChangeText={value =>
+              setType(value as VehicleType)
+            }
             autoCapitalize="words"
           />
 
@@ -179,6 +246,29 @@ Alert.alert(
             />
           </View>
         </Card>
+
+        {/* STATUS NOTE */}
+
+        <View style={styles.noteCard}>
+          <View style={styles.noteIcon}>
+            <MaterialDesignIcons
+              name="information-outline"
+              size={18}
+              color="#55D6FF"
+            />
+          </View>
+
+          <View style={styles.noteText}>
+            <Text style={styles.noteTitle}>
+              New vehicles start as Active
+            </Text>
+
+            <Text style={styles.noteDescription}>
+              The vehicle will be created with Active status and can be updated later.
+            </Text>
+          </View>
+        </View>
+
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -187,33 +277,135 @@ Alert.alert(
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#050711',
+  },
+
+  safeAreaTop: {
+    backgroundColor: '#050711',
   },
 
   content: {
     flexGrow: 1,
-    paddingHorizontal: 20,
-    paddingVertical: 24,
+    paddingHorizontal: 18,
+    paddingTop: 14,
   },
 
   header: {
-    marginBottom: 24,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 18,
+  },
+
+  headerIcon: {
+    width: 44,
+    height: 44,
+    marginRight: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor:
+      'rgba(22, 136, 255, 0.10)',
+    borderWidth: 1,
+    borderColor:
+      'rgba(22, 136, 255, 0.20)',
+  },
+
+  headerText: {
+    flex: 1,
+    minWidth: 0,
+  },
+
+  eyebrow: {
+    marginBottom: 4,
+    fontSize: 10,
+    lineHeight: 14,
+    fontWeight: '700',
+    letterSpacing: 1.1,
+    color: '#6F7892',
   },
 
   title: {
-    fontSize: 30,
+    fontSize: 28,
+    lineHeight: 34,
     fontWeight: '800',
-    color: '#0F172A',
+    letterSpacing: -0.3,
+    color: '#F5F7FF',
   },
 
   subtitle: {
-    marginTop: 6,
-    fontSize: 15,
-    color: '#64748B',
+    marginTop: 4,
+    fontSize: 13,
+    lineHeight: 18,
+    color: '#9AA4BF',
+  },
+
+  sectionHeader: {
+    marginBottom: 10,
+  },
+
+  sectionTitle: {
+    fontSize: 16,
+    lineHeight: 21,
+    fontWeight: '700',
+    color: '#F5F7FF',
+  },
+
+  sectionSubtitle: {
+    marginTop: 4,
+    marginBottom: 8,
+    fontSize: 12,
+    lineHeight: 17,
+    color: '#6F7892',
   },
 
   saveButton: {
-    marginTop: 4,
+    marginTop: 6,
+  },
+
+  noteCard: {
+    marginTop: 14,
+    padding: 13,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    borderRadius: 14,
+    backgroundColor:
+      'rgba(18, 24, 46, 0.70)',
+    borderWidth: 1,
+    borderColor:
+      'rgba(255, 255, 255, 0.06)',
+  },
+
+  noteIcon: {
+    width: 34,
+    height: 34,
+    marginRight: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor:
+      'rgba(85, 214, 255, 0.10)',
+    borderWidth: 1,
+    borderColor:
+      'rgba(85, 214, 255, 0.16)',
+  },
+
+  noteText: {
+    flex: 1,
+    minWidth: 0,
+  },
+
+  noteTitle: {
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: '700',
+    color: '#CBD3E6',
+  },
+
+  noteDescription: {
+    marginTop: 2,
+    fontSize: 11,
+    lineHeight: 16,
+    color: '#6F7892',
   },
 });
 

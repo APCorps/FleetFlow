@@ -7,23 +7,38 @@ const typography = {
   },
 
   size: {
-    xs: 12,
-    sm: 14,
-    md: 16,
-    lg: 18,
-    xl: 22,
+    xs: 10,
+    sm: 12,
+    md: 14,
+    lg: 16,
+    xl: 20,
     xxl: 28,
-    xxxl: 34,
+    xxxl: 32,
   },
 
   lineHeight: {
-    xs: 16,
-    sm: 20,
-    md: 24,
-    lg: 28,
-    xl: 32,
-    xxl: 36,
-    xxxl: 42,
+    xs: 14,
+    sm: 17,
+    md: 20,
+    lg: 23,
+    xl: 27,
+    xxl: 34,
+    xxxl: 38,
+  },
+
+  weight: {
+    regular: '400',
+    medium: '500',
+    semiBold: '600',
+    bold: '700',
+    extraBold: '800',
+  },
+
+  letterSpacing: {
+    tight: -0.3,
+    normal: 0,
+    wide: 0.4,
+    heading: 0.7,
   },
 } as const;
 

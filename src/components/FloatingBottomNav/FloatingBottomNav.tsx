@@ -1,26 +1,28 @@
-import React, {
-  useEffect,
-  useRef,
-  useState,
-} from 'react';
+import React from 'react';
 
 import {
-  Animated,
-  Easing,
-  LayoutChangeEvent,
+  LayoutAnimation,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
+  UIManager,
   View,
 } from 'react-native';
+
+import {
+  useSafeAreaInsets,
+} from 'react-native-safe-area-context';
 
 import {
   MaterialDesignIcons,
 } from '@react-native-vector-icons/material-design-icons/static';
 
 import {
+  colors,
   radius,
   spacing,
+  typography,
 } from '../../theme';
 
 export type BottomNavRoute =
@@ -28,376 +30,269 @@ export type BottomNavRoute =
   | 'Vehicles'
   | 'Drivers'
   | 'Trips'
+  | 'Maintenance'
   | 'Accounts';
 
-type FloatingBottomNavProps = {
-  activeRoute: BottomNavRoute;
-
-  onNavigate: (
-    route: BottomNavRoute,
-  ) => void;
-};
-
-type IconName =
-  React.ComponentProps<
-    typeof MaterialDesignIcons
-  >['name'];
+type IconName = React.ComponentProps<
+  typeof MaterialDesignIcons
+>['name'];
 
 type NavItem = {
   route: BottomNavRoute;
   label: string;
   icon: IconName;
-  activeColor: string;
+  color: string;
 };
 
-const navItems: NavItem[] = [
+type FloatingBottomNavProps = {
+  activeRoute: BottomNavRoute;
+  onNavigate: (
+    route: BottomNavRoute,
+  ) => void;
+};
+
+const NAV_ITEMS: NavItem[] = [
   {
     route: 'Dashboard',
     label: 'Home',
     icon: 'view-dashboard-outline',
-    activeColor: '#3B82F6',
+    color: colors.categories.dashboard,
   },
-
   {
     route: 'Vehicles',
     label: 'Vehicles',
     icon: 'truck-outline',
-    activeColor: '#1688FF',
+    color: colors.categories.vehicles,
   },
-
   {
     route: 'Drivers',
     label: 'Drivers',
-    icon: 'steering',
-    activeColor: '#00D6C9',
+    icon: 'account-group-outline',
+    color: colors.categories.drivers,
   },
-
   {
     route: 'Trips',
     label: 'Trips',
-    icon: 'map-marker-path',
-    activeColor: '#9B5CFF',
+    icon: 'source-branch',
+    color: colors.categories.trips,
   },
-
+  {
+    route: 'Maintenance',
+    label: 'Maintenance',
+    icon: 'wrench-outline',
+    color: colors.categories.maintenance,
+  },
   {
     route: 'Accounts',
     label: 'Accounts',
-    icon: 'chart-line',
-    activeColor: '#00D6A3',
+    icon: 'wallet-outline',
+    color: colors.categories.accounts,
   },
 ];
+
+if (
+  Platform.OS === 'android' &&
+  UIManager.setLayoutAnimationEnabledExperimental
+) {
+  UIManager.setLayoutAnimationEnabledExperimental(
+    true,
+  );
+}
 
 const FloatingBottomNav = ({
   activeRoute,
   onNavigate,
 }: FloatingBottomNavProps) => {
-  const [barWidth, setBarWidth] =
-    useState(0);
+  const insets = useSafeAreaInsets();
 
-  const activeIndex = Math.max(
-    navItems.findIndex(
-      item =>
-        item.route === activeRoute,
-    ),
-    0,
-  );
-
-  const indicatorPosition =
-    useRef(
-      new Animated.Value(activeIndex),
-    ).current;
-
-  const handleBarLayout = (
-    event: LayoutChangeEvent,
+  const handlePress = (
+    route: BottomNavRoute,
   ) => {
-    setBarWidth(
-      event.nativeEvent.layout.width,
+    if (route === activeRoute) {
+      return;
+    }
+
+    LayoutAnimation.configureNext(
+      LayoutAnimation.create(
+        230,
+        LayoutAnimation.Types.easeInEaseOut,
+        LayoutAnimation.Properties.scaleXY,
+      ),
     );
+
+    onNavigate(route);
   };
-
-  useEffect(() => {
-    Animated.timing(
-      indicatorPosition,
-      {
-        toValue: activeIndex,
-
-        duration: 320,
-
-        easing:
-          Easing.out(
-            Easing.cubic,
-          ),
-
-        useNativeDriver: true,
-      },
-    ).start();
-  }, [
-    activeIndex,
-    indicatorPosition,
-  ]);
-
-  const innerWidth =
-    Math.max(barWidth - 8, 0);
-
-  const itemWidth =
-    innerWidth / navItems.length;
-
-  const indicatorTranslateX =
-    indicatorPosition.interpolate({
-      inputRange: [0, 1, 2, 3, 4],
-
-      outputRange: [
-        0,
-        itemWidth,
-        itemWidth * 2,
-        itemWidth * 3,
-        itemWidth * 4,
-      ],
-    });
-
-  const activeColor =
-    navItems[activeIndex]
-      ?.activeColor ?? '#3B82F6';
 
   return (
     <View
-      style={styles.outerContainer}
-      pointerEvents="box-none">
-
+      pointerEvents="box-none"
+      style={[
+        styles.wrapper,
+        {
+          bottom:
+            Math.max(
+              insets.bottom,
+              spacing.xs,
+            ) + spacing.sm,
+        },
+      ]}>
       <View
-        style={styles.navigationBar}
-        onLayout={handleBarLayout}>
-
-        {/* ─────────────────────────
-            SLIDING ACTIVE BACKGROUND
-           ───────────────────────── */}
-
-        {barWidth > 0 && (
-          <Animated.View
-            pointerEvents="none"
-            style={[
-              styles.activeIndicator,
-
-              {
-                width: itemWidth,
-                transform: [
-                  {
-                    translateX:
-                      indicatorTranslateX,
-                  },
-                ],
-
-                backgroundColor:
-                  `${activeColor}18`,
-
-                borderColor:
-                  `${activeColor}25`,
-              },
-            ]}
-          />
-        )}
-
-        {/* ─────────────────────────
-            NAVIGATION ITEMS
-           ───────────────────────── */}
-
-        {navItems.map(item => {
-          const isActive =
-            activeRoute === item.route;
+        style={styles.navBar}>
+        {NAV_ITEMS.map(item => {
+          const active =
+            item.route === activeRoute;
 
           return (
             <Pressable
               key={item.route}
-              accessibilityRole="button"
-              accessibilityLabel={
-                `Open ${item.label}`
-              }
+              accessibilityRole="tab"
               accessibilityState={{
-                selected: isActive,
+                selected: active,
               }}
+              accessibilityLabel={
+                item.label
+              }
               onPress={() =>
-                onNavigate(item.route)
+                handlePress(
+                  item.route,
+                )
               }
               style={({pressed}) => [
                 styles.navItem,
-
+                active
+                  ? styles.navItemActive
+                  : styles.navItemInactive,
                 pressed &&
-                  styles.pressedNavItem,
+                  styles.navItemPressed,
               ]}>
-
-              <MaterialDesignIcons
-                name={item.icon}
-                size={21}
-                color={
-                  isActive
-                    ? item.activeColor
-                    : '#94A3B8'
-                }
-              />
-
-              <Text
+              <View
                 style={[
-                  styles.label,
-
-                  isActive && {
-                    color:
-                      item.activeColor,
-
-                    fontWeight: '700',
+                  styles.iconShell,
+                  active && {
+                    backgroundColor:
+                      `${item.color}20`,
+                    borderColor:
+                      `${item.color}38`,
                   },
                 ]}>
-                {item.label}
-              </Text>
+                <MaterialDesignIcons
+                  name={item.icon}
+                  size={active ? 18 : 20}
+                  color={
+                    active
+                      ? item.color
+                      : colors.textMuted
+                  }
+                />
+              </View>
 
+              {active && (
+                <Text
+                  numberOfLines={1}
+                  style={[
+                    styles.activeLabel,
+                    {
+                      color:
+                        item.color,
+                    },
+                  ]}>
+                  {item.label}
+                </Text>
+              )}
             </Pressable>
           );
         })}
-
       </View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-
-  /*
-   * ─────────────────────────────────────
-   * FLOATING POSITION
-   * ─────────────────────────────────────
-   */
-
-  outerContainer: {
+  wrapper: {
     position: 'absolute',
-
-    left: spacing.xxl,
-    right: spacing.xxl,
-
-    bottom: spacing.lg,
-
+    left: spacing.sm,
+    right: spacing.sm,
     alignItems: 'center',
+    zIndex: 50,
   },
 
-  /*
-   * ─────────────────────────────────────
-   * NAVIGATION BAR
-   * ─────────────────────────────────────
-   */
-
-  navigationBar: {
+  navBar: {
     width: '100%',
-
-    minHeight: 68,
-
-    flexDirection: 'row',
-
-    alignItems: 'center',
-
-    paddingHorizontal: spacing.xs,
-
+    maxWidth: 520,
+    minHeight: 58,
+    paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
-
+    borderRadius: radius.sheet,
     backgroundColor:
-      'rgba(8, 18, 34, 0.96)',
-
+      'rgba(8, 12, 28, 0.96)',
     borderWidth: 1,
-
-    borderColor:
-      'rgba(148, 163, 184, 0.18)',
-
-    borderRadius: radius.xl,
-
-    shadowColor: '#000000',
-
+    borderColor: colors.borderStrong,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    shadowColor: colors.black,
     shadowOffset: {
       width: 0,
-      height: 8,
+      height: 10,
     },
-
     shadowOpacity: 0.28,
-
-    shadowRadius: 18,
-
-    elevation: 8,
-
-    overflow: 'hidden',
+    shadowRadius: 22,
+    elevation: 12,
   },
-
-  /*
-   * ─────────────────────────────────────
-   * SLIDING ACTIVE INDICATOR
-   * ─────────────────────────────────────
-   *
-   * This is the ONLY thing that moves.
-   */
-
-  activeIndicator: {
-    position: 'absolute',
-
-    left: spacing.xs,
-
-    top: spacing.xs,
-
-    bottom: spacing.xs,
-
-    borderWidth: 1,
-
-    borderRadius: radius.lg,
-  },
-
-  /*
-   * ─────────────────────────────────────
-   * NAV ITEM
-   * ─────────────────────────────────────
-   */
 
   navItem: {
-    flex: 1,
-
-    minHeight: 54,
-
+    minHeight: 48,
+    marginHorizontal: 2,
+    flexDirection: 'row',
     alignItems: 'center',
-
     justifyContent: 'center',
-
-    borderRadius: radius.lg,
-
-    paddingHorizontal: 2,
-
-    zIndex: 2,
+    borderRadius: radius.button,
   },
 
-  /*
-   * ─────────────────────────────────────
-   * PRESS FEEDBACK
-   * ─────────────────────────────────────
-   */
+  navItemActive: {
+    flex: 1.9,
+    minWidth: 72,
+    paddingHorizontal: spacing.sm,
+    backgroundColor:
+      'rgba(255, 255, 255, 0.055)',
+    borderWidth: 1,
+    borderColor:
+      'rgba(255, 255, 255, 0.07)',
+  },
 
-  pressedNavItem: {
-    opacity: 0.62,
+  navItemInactive: {
+    flex: 1,
+    minWidth: 36,
+  },
 
+  navItemPressed: {
+    opacity: 0.72,
     transform: [
       {
-        scale: 0.96,
+        scale: 0.97,
       },
     ],
   },
 
-  /*
-   * ─────────────────────────────────────
-   * LABEL
-   * ─────────────────────────────────────
-   */
+  iconShell: {
+    width: 34,
+    height: 34,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor:
+      'transparent',
+  },
 
-  label: {
-    color: '#94A3B8',
-
-    fontSize: 9,
-
-    lineHeight: 12,
-
-    fontWeight: '500',
-
-    marginTop: 3,
+  activeLabel: {
+    marginLeft: spacing.xs,
+    maxWidth: 72,
+    fontSize: 8.5,
+    lineHeight: 11,
+    fontWeight:
+      typography.weight.bold,
+    letterSpacing: 0.1,
   },
 });
 

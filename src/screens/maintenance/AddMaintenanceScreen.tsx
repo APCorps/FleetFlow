@@ -1,18 +1,85 @@
 import React, {useState} from 'react';
-import {useNavigation} from '@react-navigation/native';
+
 import {
   Alert,
-  SafeAreaView,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
 
-import {Button, Card} from '../../components';
+import {SafeAreaView} from 'react-native-safe-area-context';
+
+import {useNavigation} from '@react-navigation/native';
+
+import {
+  MaterialDesignIcons,
+} from '@react-native-vector-icons/material-design-icons/static';
+
 import {useMaintenance, useVehicles} from '../../store';
+import {colors, spacing, radius, typography} from '../../theme';
+
+type Status =
+  | 'Scheduled'
+  | 'In Progress'
+  | 'Completed';
+
+type Priority =
+  | 'Low'
+  | 'Medium'
+  | 'High';
+
+const ACCENT = colors.categories.maintenance;
+
+const STATUS_META = {
+  Scheduled: {
+    icon: 'calendar-clock-outline' as const,
+    color: colors.warning,
+    background: colors.warningSoft,
+    border: 'rgba(255, 200, 87, 0.28)',
+  },
+  'In Progress': {
+    icon: 'progress-clock' as const,
+    color: colors.primary,
+    background: colors.primarySoft,
+    border: colors.primaryBorder,
+  },
+  Completed: {
+    icon: 'check-circle-outline' as const,
+    color: colors.success,
+    background: colors.successSoft,
+    border: 'rgba(57, 230, 196, 0.24)',
+  },
+} as const;
+
+const PRIORITY_META = {
+  Low: {
+    icon: 'flag-outline' as const,
+    color: colors.success,
+    background: colors.successSoft,
+    border: 'rgba(57, 230, 196, 0.24)',
+  },
+  Medium: {
+    icon: 'flag-triangle-outline' as const,
+    color: colors.warning,
+    background: colors.warningSoft,
+    border: 'rgba(255, 200, 87, 0.28)',
+  },
+  High: {
+    icon: 'alert-outline' as const,
+    color: colors.danger,
+    background: colors.dangerSoft,
+    border: 'rgba(255, 102, 133, 0.28)',
+  },
+} as const;
+
+type IconName = React.ComponentProps<
+  typeof MaterialDesignIcons
+>['name'];
 
 const AddMaintenanceScreen = () => {
   const navigation = useNavigation();
@@ -26,12 +93,10 @@ const AddMaintenanceScreen = () => {
     useState('');
 
   const [status, setStatus] =
-    useState<
-      'Scheduled' | 'In Progress' | 'Completed'
-    >('Scheduled');
+    useState<Status>('Scheduled');
 
   const [priority, setPriority] =
-    useState<'Low' | 'Medium' | 'High'>('Medium');
+    useState<Priority>('Medium');
 
   const [scheduledDate, setScheduledDate] =
     useState('');
@@ -145,454 +210,1105 @@ const AddMaintenanceScreen = () => {
     );
   };
 
+  const selectedVehicle = vehicles.find(
+    vehicle => vehicle.id === vehicleId,
+  );
+
+  const statusMeta = STATUS_META[status];
+  const priorityMeta = PRIORITY_META[priority];
+
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView
-        contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}>
-        <View style={styles.header}>
-          <Text style={styles.title}>
-            Add Maintenance
-          </Text>
+    <SafeAreaView
+      style={styles.safeArea}
+      edges={['top', 'bottom', 'left', 'right']}>
+      <KeyboardAvoidingView
+        style={styles.keyboard}
+        behavior={
+          Platform.OS === 'ios'
+            ? 'padding'
+            : undefined
+        }>
+        <ScrollView
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}>
+          <View style={styles.header}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
+              onPress={() => navigation.goBack()}
+              style={({pressed}) => [
+                styles.backButton,
+                pressed && styles.pressed,
+              ]}>
+              <MaterialDesignIcons
+                name="arrow-left"
+                size={21}
+                color={colors.textPrimary}
+              />
+            </Pressable>
 
-          <Text style={styles.subtitle}>
-            Create a vehicle maintenance record
-          </Text>
-        </View>
+            <View style={styles.headerIcon}>
+              <MaterialDesignIcons
+                name="wrench-outline"
+                size={21}
+                color={ACCENT}
+              />
+            </View>
 
-        <Card>
-          <Text style={styles.sectionTitle}>
-            Vehicle
-          </Text>
+            <View style={styles.headerCopy}>
+              <Text style={styles.eyebrow}>
+                SERVICE CONTROL
+              </Text>
+              <Text style={styles.title}>
+                Add Maintenance
+              </Text>
+              <Text style={styles.subtitle}>
+                Create a clean service record for a fleet vehicle.
+              </Text>
+            </View>
+          </View>
 
-          <Text style={styles.label}>
-            Select Vehicle
-          </Text>
+          <View style={styles.heroCard}>
+            <View style={styles.heroTop}>
+              <View style={styles.heroIdentity}>
+                <View style={styles.heroIcon}>
+                  <MaterialDesignIcons
+                    name="wrench-plus-outline"
+                    size={23}
+                    color={ACCENT}
+                  />
+                </View>
 
-          {vehicles.map(vehicle => (
-            <TouchableOpacity
-              key={vehicle.id}
-              style={[
-                styles.vehicleOption,
-                vehicleId === vehicle.id &&
-                  styles.vehicleOptionSelected,
-              ]}
-              onPress={() =>
-                setVehicleId(vehicle.id)
-              }>
-              <Text
+                <View style={styles.heroCopy}>
+                  <Text
+                    style={styles.heroTitle}
+                    numberOfLines={2}>
+                    {title.trim() || 'New maintenance record'}
+                  </Text>
+
+                  <View style={styles.heroVehicleRow}>
+                    <MaterialDesignIcons
+                      name="truck-outline"
+                      size={15}
+                      color={colors.textMuted}
+                    />
+                    <Text
+                      style={styles.heroVehicleText}
+                      numberOfLines={1}>
+                      {selectedVehicle?.registrationNumber ??
+                        'Select a vehicle'}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              <View
                 style={[
-                  styles.vehicleTitle,
-                  vehicleId === vehicle.id &&
-                    styles.vehicleTitleSelected,
+                  styles.badge,
+                  {
+                    backgroundColor:
+                      statusMeta.background,
+                    borderColor:
+                      statusMeta.border,
+                  },
                 ]}>
-                {vehicle.registrationNumber}
-              </Text>
-
-              <Text style={styles.vehicleSubtitle}>
-                {vehicle.make} {vehicle.model}
-              </Text>
-            </TouchableOpacity>
-          ))}
-
-          {vehicles.length === 0 && (
-            <Text style={styles.emptyText}>
-              No vehicles available.
-            </Text>
-          )}
-        </Card>
-
-        <Card>
-          <Text style={styles.sectionTitle}>
-            Maintenance Information
-          </Text>
-
-          <Text style={styles.label}>
-            Title
-          </Text>
-
-          <TextInput
-            style={styles.input}
-            value={title}
-            onChangeText={setTitle}
-            placeholder="e.g. Engine Service"
-            placeholderTextColor="#94A3B8"
-          />
-
-          <Text style={styles.label}>
-            Description
-          </Text>
-
-          <TextInput
-            style={[
-              styles.input,
-              styles.descriptionInput,
-            ]}
-            value={description}
-            onChangeText={setDescription}
-            placeholder="Describe the maintenance work"
-            placeholderTextColor="#94A3B8"
-            multiline
-            textAlignVertical="top"
-          />
-        </Card>
-
-        <Card>
-          <Text style={styles.sectionTitle}>
-            Status
-          </Text>
-
-          <View style={styles.optionsRow}>
-            {(
-              [
-                'Scheduled',
-                'In Progress',
-                'Completed',
-              ] as const
-            ).map(option => (
-              <TouchableOpacity
-                key={option}
-                style={[
-                  styles.statusOption,
-                  status === option &&
-                    (option === 'Scheduled'
-                      ? styles.scheduledSelected
-                      : option === 'In Progress'
-                      ? styles.inProgressSelected
-                      : styles.completedSelected),
-                ]}
-                onPress={() => setStatus(option)}>
+                <MaterialDesignIcons
+                  name={statusMeta.icon}
+                  size={14}
+                  color={statusMeta.color}
+                />
                 <Text
                   style={[
-                    styles.optionText,
-                    status === option &&
-                      (option === 'Scheduled'
-                        ? styles.scheduledText
-                        : option === 'In Progress'
-                        ? styles.inProgressText
-                        : styles.completedText),
+                    styles.badgeText,
+                    {color: statusMeta.color},
                   ]}>
-                  {option}
+                  {status}
                 </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </Card>
+              </View>
+            </View>
 
-        <Card>
-          <Text style={styles.sectionTitle}>
-            Priority
-          </Text>
+            <View style={styles.heroFooter}>
+              <View style={styles.heroFooterItem}>
+                <Text style={styles.microLabel}>
+                  PRIORITY
+                </Text>
+                <View style={styles.inlineValue}>
+                  <View
+                    style={[
+                      styles.priorityDot,
+                      {
+                        backgroundColor:
+                          priorityMeta.color,
+                      },
+                    ]}
+                  />
+                  <Text
+                    style={[
+                      styles.inlineValueText,
+                      {color: priorityMeta.color},
+                    ]}>
+                    {priority}
+                  </Text>
+                </View>
+              </View>
 
-          <View style={styles.optionsRow}>
-            {(
-              ['Low', 'Medium', 'High'] as const
-            ).map(option => (
-              <TouchableOpacity
-                key={option}
-                style={[
-                  styles.priorityOption,
-                  priority === option &&
-                    (option === 'Low'
-                      ? styles.lowPrioritySelected
-                      : option === 'Medium'
-                      ? styles.mediumPrioritySelected
-                      : styles.highPrioritySelected),
-                ]}
-                onPress={() =>
-                  setPriority(option)
-                }>
+              <View style={styles.heroFooterDivider} />
+
+              <View style={styles.heroFooterItem}>
+                <Text style={styles.microLabel}>
+                  SCHEDULE
+                </Text>
                 <Text
-                  style={[
-                    styles.optionText,
-                    priority === option &&
-                      (option === 'Low'
-                        ? styles.lowPriorityText
-                        : option === 'Medium'
-                        ? styles.mediumPriorityText
-                        : styles.highPriorityText),
-                  ]}>
-                  {option}
+                  style={styles.recordId}
+                  numberOfLines={1}>
+                  {scheduledDate.trim() || 'Not set'}
                 </Text>
-              </TouchableOpacity>
-            ))}
+              </View>
+            </View>
           </View>
-        </Card>
 
-        <Card>
-          <Text style={styles.sectionTitle}>
-            Schedule & Cost
-          </Text>
-
-          <Text style={styles.label}>
-            Scheduled Date
-          </Text>
-
-          <TextInput
-            style={styles.input}
-            value={scheduledDate}
-            onChangeText={setScheduledDate}
-            placeholder="YYYY-MM-DD"
-            placeholderTextColor="#94A3B8"
-            keyboardType="numbers-and-punctuation"
+          <SectionHeader
+            eyebrow="VEHICLE"
+            title="Assignment"
+            subtitle="Choose the vehicle receiving the maintenance work."
           />
 
-          {status === 'Completed' && (
-            <>
-              <Text style={styles.label}>
-                Completed Date
-              </Text>
+          <View style={styles.card}>
+            {vehicles.map(vehicle => {
+              const selected =
+                vehicleId === vehicle.id;
 
-              <TextInput
-                style={styles.input}
+              return (
+                <Pressable
+                  key={vehicle.id}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Select ${vehicle.registrationNumber}`}
+                  onPress={() =>
+                    setVehicleId(vehicle.id)
+                  }
+                  style={({pressed}) => [
+                    styles.vehicleOption,
+                    selected &&
+                      styles.vehicleOptionSelected,
+                    pressed && styles.pressed,
+                  ]}>
+                  <View
+                    style={[
+                      styles.vehicleIcon,
+                      selected &&
+                        styles.vehicleIconSelected,
+                    ]}>
+                    <MaterialDesignIcons
+                      name="truck-outline"
+                      size={18}
+                      color={
+                        selected
+                          ? ACCENT
+                          : colors.textSecondary
+                      }
+                    />
+                  </View>
+
+                  <View style={styles.vehicleCopy}>
+                    <Text
+                      style={[
+                        styles.vehicleTitle,
+                        selected &&
+                          styles.vehicleTitleSelected,
+                      ]}
+                      numberOfLines={1}>
+                      {vehicle.registrationNumber}
+                    </Text>
+                    <Text
+                      style={styles.vehicleSubtitle}
+                      numberOfLines={1}>
+                      {vehicle.make} {vehicle.model}
+                    </Text>
+                  </View>
+
+                  {selected && (
+                    <View
+                      style={styles.selectedCheck}>
+                      <MaterialDesignIcons
+                        name="check"
+                        size={14}
+                        color="#08100D"
+                      />
+                    </View>
+                  )}
+                </Pressable>
+              );
+            })}
+
+            {vehicles.length === 0 && (
+              <View style={styles.emptyVehicle}>
+                <MaterialDesignIcons
+                  name="truck-off-outline"
+                  size={20}
+                  color={colors.textMuted}
+                />
+                <Text style={styles.emptyText}>
+                  No vehicles available.
+                </Text>
+              </View>
+            )}
+          </View>
+
+          <SectionHeader
+            eyebrow="DETAILS"
+            title="Maintenance information"
+            subtitle="Describe the work clearly for future service history."
+          />
+
+          <View style={styles.card}>
+            <Field
+              label="Maintenance title"
+              value={title}
+              onChangeText={setTitle}
+              placeholder="e.g. Engine Service"
+              icon="wrench-outline"
+            />
+
+            <Field
+              label="Description"
+              value={description}
+              onChangeText={setDescription}
+              placeholder="Describe the maintenance work"
+              icon="text-box-outline"
+              multiline
+              last
+            />
+          </View>
+
+          <SectionHeader
+            eyebrow="STATE"
+            title="Status"
+            subtitle="Set the current service lifecycle."
+          />
+
+          <View style={styles.card}>
+            <View style={styles.optionGrid}>
+              {(
+                [
+                  'Scheduled',
+                  'In Progress',
+                  'Completed',
+                ] as const
+              ).map(option => {
+                const meta =
+                  STATUS_META[option];
+                const selected =
+                  status === option;
+
+                return (
+                  <Pressable
+                    key={option}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Set status to ${option}`}
+                    onPress={() =>
+                      setStatus(option)
+                    }
+                    style={({pressed}) => [
+                      styles.statusOption,
+                      selected && {
+                        backgroundColor:
+                          meta.background,
+                        borderColor:
+                          meta.border,
+                      },
+                      pressed && styles.pressed,
+                    ]}>
+                    <MaterialDesignIcons
+                      name={meta.icon}
+                      size={17}
+                      color={
+                        selected
+                          ? meta.color
+                          : colors.textMuted
+                      }
+                    />
+                    <Text
+                      style={[
+                        styles.optionText,
+                        selected && {
+                          color:
+                            meta.color,
+                        },
+                      ]}>
+                      {option}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+
+          <SectionHeader
+            eyebrow="URGENCY"
+            title="Priority"
+            subtitle="Use priority to highlight service items that matter most."
+          />
+
+          <View style={styles.card}>
+            <View style={styles.optionGrid}>
+              {(
+                ['Low', 'Medium', 'High'] as const
+              ).map(option => {
+                const meta =
+                  PRIORITY_META[option];
+                const selected =
+                  priority === option;
+
+                return (
+                  <Pressable
+                    key={option}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Set priority to ${option}`}
+                    onPress={() =>
+                      setPriority(option)
+                    }
+                    style={({pressed}) => [
+                      styles.priorityOption,
+                      selected && {
+                        backgroundColor:
+                          meta.background,
+                        borderColor:
+                          meta.border,
+                      },
+                      pressed && styles.pressed,
+                    ]}>
+                    <MaterialDesignIcons
+                      name={meta.icon}
+                      size={17}
+                      color={
+                        selected
+                          ? meta.color
+                          : colors.textMuted
+                      }
+                    />
+                    <Text
+                      style={[
+                        styles.optionText,
+                        selected && {
+                          color:
+                            meta.color,
+                        },
+                      ]}>
+                      {option}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+
+          <SectionHeader
+            eyebrow="SCHEDULE"
+            title="Timing & cost"
+            subtitle="Capture planned timing, current mileage and service cost."
+          />
+
+          <View style={styles.card}>
+            <Field
+              label="Scheduled date"
+              value={scheduledDate}
+              onChangeText={setScheduledDate}
+              placeholder="YYYY-MM-DD"
+              icon="calendar-outline"
+              keyboardType="numbers-and-punctuation"
+            />
+
+            {status === 'Completed' && (
+              <Field
+                label="Completed date"
                 value={completedDate}
                 onChangeText={setCompletedDate}
                 placeholder="YYYY-MM-DD"
-                placeholderTextColor="#94A3B8"
+                icon="calendar-check-outline"
                 keyboardType="numbers-and-punctuation"
               />
-            </>
-          )}
+            )}
 
-          <Text style={styles.label}>
-            Mileage
-          </Text>
+            <Field
+              label="Mileage"
+              value={mileage}
+              onChangeText={setMileage}
+              placeholder="e.g. 50000"
+              icon="counter"
+              keyboardType="numeric"
+              suffix="km"
+            />
 
-          <TextInput
-            style={styles.input}
-            value={mileage}
-            onChangeText={setMileage}
-            placeholder="e.g. 50000"
-            placeholderTextColor="#94A3B8"
-            keyboardType="numeric"
-          />
+            <Field
+              label="Cost"
+              value={cost}
+              onChangeText={setCost}
+              placeholder="e.g. 5000"
+              icon="cash-outline"
+              keyboardType="numeric"
+              suffix="₹"
+              last
+            />
+          </View>
 
-          <Text style={styles.label}>
-            Cost
-          </Text>
-
-          <TextInput
-            style={styles.input}
-            value={cost}
-            onChangeText={setCost}
-            placeholder="e.g. 5000"
-            placeholderTextColor="#94A3B8"
-            keyboardType="numeric"
-          />
-        </Card>
-
-        <View style={styles.actions}>
-          <View style={styles.actionButton}>
-            <Button
-              title="Cancel"
+          <View style={styles.actions}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Cancel adding maintenance"
               onPress={() =>
                 navigation.goBack()
               }
-            />
+              style={({pressed}) => [
+                styles.secondaryButton,
+                pressed && styles.buttonPressed,
+              ]}>
+              <MaterialDesignIcons
+                name="close"
+                size={18}
+                color={colors.textSecondary}
+              />
+              <Text
+                style={styles.secondaryButtonText}>
+                Cancel
+              </Text>
+            </Pressable>
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Save maintenance"
+              onPress={handleSave}
+              style={({pressed}) => [
+                styles.primaryButton,
+                pressed && styles.buttonPressed,
+              ]}>
+              <MaterialDesignIcons
+                name="plus"
+                size={18}
+                color={colors.black}
+              />
+              <Text
+                style={styles.primaryButtonText}>
+                Save Maintenance
+              </Text>
+            </Pressable>
           </View>
 
-          <View style={styles.actionButton}>
-            <Button
-              title="Save Maintenance"
-              onPress={handleSave}
-            />
-          </View>
-        </View>
-      </ScrollView>
+          <Text style={styles.footerHint}>
+            New records are added to the existing maintenance
+            store with a unique record ID and creation timestamp.
+          </Text>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 };
 
+const SectionHeader = ({
+  eyebrow,
+  title,
+  subtitle,
+}: {
+  eyebrow: string;
+  title: string;
+  subtitle: string;
+}) => (
+  <View style={styles.sectionHeader}>
+    <Text style={styles.sectionEyebrow}>
+      {eyebrow}
+    </Text>
+    <Text style={styles.sectionTitle}>
+      {title}
+    </Text>
+    <Text style={styles.sectionSubtitle}>
+      {subtitle}
+    </Text>
+  </View>
+);
+
+const Field = ({
+  label,
+  value,
+  onChangeText,
+  placeholder,
+  icon,
+  multiline,
+  keyboardType,
+  suffix,
+  last,
+}: {
+  label: string;
+  value: string;
+  onChangeText: (value: string) => void;
+  placeholder: string;
+  icon: IconName;
+  multiline?: boolean;
+  keyboardType?: 'default' | 'numeric' | 'numbers-and-punctuation';
+  suffix?: string;
+  last?: boolean;
+}) => (
+  <View
+    style={[
+      styles.field,
+      last && styles.fieldLast,
+    ]}>
+    <Text style={styles.label}>
+      {label}
+    </Text>
+
+    <View
+      style={[
+        styles.inputShell,
+        multiline && styles.inputShellMultiline,
+      ]}>
+      <MaterialDesignIcons
+        name={icon}
+        size={18}
+        color={colors.textMuted}
+        style={
+          multiline
+            ? styles.inputIconTop
+            : undefined
+        }
+      />
+
+      <TextInput
+        style={[
+          styles.input,
+          multiline && styles.descriptionInput,
+        ]}
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor={colors.textMuted}
+        multiline={multiline}
+        textAlignVertical={
+          multiline ? 'top' : 'center'
+        }
+        keyboardType={keyboardType}
+      />
+
+      {suffix && (
+        <View style={styles.suffix}>
+          <Text style={styles.suffixText}>
+            {suffix}
+          </Text>
+        </View>
+      )}
+    </View>
+  </View>
+);
+
 const styles = StyleSheet.create({
-  container: {
+  safeArea: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.background,
+  },
+
+  keyboard: {
+    flex: 1,
   },
 
   content: {
-    paddingHorizontal: 20,
-    paddingVertical: 24,
-    paddingBottom: 40,
+    paddingHorizontal: spacing.screen,
+    paddingTop: spacing.md,
+    paddingBottom: 132,
   },
 
   header: {
-    marginBottom: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.section,
+  },
+
+  backButton: {
+    width: spacing.touch,
+    height: spacing.touch,
+    borderRadius: radius.button,
+    backgroundColor: colors.surfaceStrong,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.sm,
+  },
+
+  headerIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: radius.lg,
+    backgroundColor: colors.secondarySoft,
+    borderWidth: 1,
+    borderColor: 'rgba(155, 123, 255, 0.22)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.md,
+  },
+
+  headerCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+
+  eyebrow: {
+    color: colors.textMuted,
+    fontSize: typography.size.xs,
+    lineHeight: typography.lineHeight.xs,
+    fontWeight: typography.weight.bold,
+    letterSpacing: typography.letterSpacing.heading,
   },
 
   title: {
-    fontSize: 30,
-    fontWeight: '800',
-    color: '#0F172A',
+    marginTop: 2,
+    color: colors.textPrimary,
+    fontSize: typography.size.xxl,
+    lineHeight: typography.lineHeight.xxl,
+    fontWeight: typography.weight.extraBold,
+    letterSpacing: typography.letterSpacing.tight,
   },
 
   subtitle: {
-    marginTop: 6,
-    fontSize: 15,
-    color: '#64748B',
+    marginTop: 3,
+    color: colors.textSecondary,
+    fontSize: typography.size.sm,
+    lineHeight: typography.lineHeight.sm,
+    fontWeight: typography.weight.medium,
+  },
+
+  heroCard: {
+    marginBottom: spacing.section,
+    padding: spacing.card,
+    borderRadius: radius.card,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+
+  heroTop: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+
+  heroIdentity: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  heroIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: radius.lg,
+    backgroundColor: colors.warningSoft,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 200, 87, 0.24)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.md,
+  },
+
+  heroCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+
+  heroTitle: {
+    color: colors.textPrimary,
+    fontSize: typography.size.lg,
+    lineHeight: typography.lineHeight.lg,
+    fontWeight: typography.weight.bold,
+  },
+
+  heroVehicleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: spacing.xs,
+  },
+
+  heroVehicleText: {
+    flex: 1,
+    marginLeft: spacing.xs,
+    color: colors.textSecondary,
+    fontSize: typography.size.sm,
+    lineHeight: typography.lineHeight.sm,
+    fontWeight: typography.weight.semiBold,
+  },
+
+  badge: {
+    minHeight: 30,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: spacing.sm,
+  },
+
+  badgeText: {
+    marginLeft: spacing.xs,
+    fontSize: typography.size.xs,
+    lineHeight: typography.lineHeight.xs,
+    fontWeight: typography.weight.bold,
+  },
+
+  heroFooter: {
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderLight,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  heroFooterItem: {
+    flex: 1,
+    minWidth: 0,
+  },
+
+  heroFooterDivider: {
+    width: 1,
+    height: 28,
+    backgroundColor: colors.border,
+    marginHorizontal: spacing.md,
+  },
+
+  microLabel: {
+    color: colors.textMuted,
+    fontSize: 9,
+    lineHeight: 12,
+    fontWeight: typography.weight.bold,
+    letterSpacing: typography.letterSpacing.wide,
+  },
+
+  inlineValue: {
+    marginTop: spacing.xs,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  priorityDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    marginRight: spacing.xs,
+  },
+
+  inlineValueText: {
+    fontSize: typography.size.sm,
+    lineHeight: typography.lineHeight.sm,
+    fontWeight: typography.weight.bold,
+  },
+
+  recordId: {
+    marginTop: spacing.xs,
+    color: colors.textSoft,
+    fontSize: typography.size.sm,
+    lineHeight: typography.lineHeight.sm,
+    fontWeight: typography.weight.semiBold,
+  },
+
+  sectionHeader: {
+    marginBottom: spacing.md,
+    paddingHorizontal: spacing.xs,
+  },
+
+  sectionEyebrow: {
+    color: colors.textMuted,
+    fontSize: 9,
+    lineHeight: 12,
+    fontWeight: typography.weight.bold,
+    letterSpacing: typography.letterSpacing.wide,
   },
 
   sectionTitle: {
-    marginBottom: 16,
-    fontSize: 17,
-    fontWeight: '800',
-    color: '#0F172A',
+    marginTop: spacing.xs,
+    color: colors.textPrimary,
+    fontSize: typography.size.lg,
+    lineHeight: typography.lineHeight.lg,
+    fontWeight: typography.weight.bold,
   },
 
-  label: {
-    marginBottom: 6,
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#475569',
+  sectionSubtitle: {
+    marginTop: spacing.xs,
+    color: colors.textMuted,
+    fontSize: typography.size.sm,
+    lineHeight: typography.lineHeight.sm,
   },
 
-  input: {
-    marginBottom: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+  card: {
+    marginBottom: spacing.section,
+    padding: spacing.card,
+    borderRadius: radius.card,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 8,
-    backgroundColor: '#FFFFFF',
-    fontSize: 15,
-    color: '#0F172A',
-  },
-
-  descriptionInput: {
-    minHeight: 100,
+    borderColor: colors.border,
   },
 
   vehicleOption: {
-    marginBottom: 8,
-    padding: 14,
+    minHeight: spacing.touch,
+    marginBottom: spacing.sm,
+    padding: spacing.md,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 8,
-    backgroundColor: '#FFFFFF',
+    borderColor: colors.border,
+    borderRadius: radius.input,
+    backgroundColor: colors.surfaceStrong,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
 
   vehicleOptionSelected: {
-    borderColor: '#2563EB',
-    backgroundColor: '#EFF6FF',
+    backgroundColor: colors.warningSoft,
+    borderColor: 'rgba(255, 200, 87, 0.30)',
+  },
+
+  vehicleIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceElevated,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.sm,
+  },
+
+  vehicleIconSelected: {
+    backgroundColor: colors.warningSoft,
+    borderColor: 'rgba(255, 200, 87, 0.25)',
+  },
+
+  vehicleCopy: {
+    flex: 1,
+    minWidth: 0,
   },
 
   vehicleTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#475569',
+    color: colors.textSecondary,
+    fontSize: typography.size.md,
+    lineHeight: typography.lineHeight.md,
+    fontWeight: typography.weight.bold,
   },
 
   vehicleTitleSelected: {
-    color: '#2563EB',
+    color: colors.warning,
   },
 
   vehicleSubtitle: {
-    marginTop: 3,
-    fontSize: 12,
-    color: '#64748B',
+    marginTop: 2,
+    color: colors.textMuted,
+    fontSize: typography.size.xs,
+    lineHeight: typography.lineHeight.xs,
+    fontWeight: typography.weight.medium,
+  },
+
+  selectedCheck: {
+    width: 26,
+    height: 26,
+    borderRadius: radius.pill,
+    backgroundColor: colors.warning,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: spacing.sm,
+  },
+
+  emptyVehicle: {
+    minHeight: spacing.touch,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   emptyText: {
-    fontSize: 13,
-    color: '#64748B',
-    textAlign: 'center',
-    paddingVertical: 10,
+    marginLeft: spacing.sm,
+    color: colors.textMuted,
+    fontSize: typography.size.sm,
+    lineHeight: typography.lineHeight.sm,
   },
 
-  optionsRow: {
+  field: {
+    marginBottom: spacing.lg,
+  },
+
+  fieldLast: {
+    marginBottom: 0,
+  },
+
+  label: {
+    marginBottom: spacing.sm,
+    color: colors.textSoft,
+    fontSize: typography.size.sm,
+    lineHeight: typography.lineHeight.sm,
+    fontWeight: typography.weight.semiBold,
+  },
+
+  inputShell: {
+    minHeight: 48,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.input,
+    backgroundColor: colors.surfaceStrong,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+  },
+
+  inputShellMultiline: {
+    alignItems: 'flex-start',
+    minHeight: 118,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.md,
+  },
+
+  inputIconTop: {
+    marginTop: 2,
+  },
+
+  input: {
+    flex: 1,
+    minWidth: 0,
+    marginLeft: spacing.sm,
+    paddingVertical: 0,
+    color: colors.textPrimary,
+    fontSize: typography.size.md,
+    lineHeight: typography.lineHeight.md,
+    fontWeight: typography.weight.medium,
+  },
+
+  descriptionInput: {
+    minHeight: 86,
+    paddingTop: 0,
+  },
+
+  suffix: {
+    marginLeft: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.sm,
+    backgroundColor: colors.surfaceElevated,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+
+  suffixText: {
+    color: colors.textMuted,
+    fontSize: typography.size.xs,
+    lineHeight: typography.lineHeight.xs,
+    fontWeight: typography.weight.bold,
+  },
+
+  optionGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    marginHorizontal: -4,
   },
 
   statusOption: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    minHeight: spacing.touch,
+    flexGrow: 1,
+    flexBasis: 0,
+    minWidth: 100,
+    margin: 4,
+    paddingHorizontal: spacing.md,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 20,
-    backgroundColor: '#FFFFFF',
-  },
-
-  scheduledSelected: {
-    borderColor: '#FDE68A',
-    backgroundColor: '#FEF3C7',
-  },
-
-  inProgressSelected: {
-    borderColor: '#93C5FD',
-    backgroundColor: '#DBEAFE',
-  },
-
-  completedSelected: {
-    borderColor: '#86EFAC',
-    backgroundColor: '#DCFCE7',
+    borderColor: colors.border,
+    borderRadius: radius.input,
+    backgroundColor: colors.surfaceStrong,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   priorityOption: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    minHeight: spacing.touch,
+    flexGrow: 1,
+    flexBasis: 0,
+    minWidth: 100,
+    margin: 4,
+    paddingHorizontal: spacing.md,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 20,
-    backgroundColor: '#FFFFFF',
-  },
-
-  lowPrioritySelected: {
-    borderColor: '#86EFAC',
-    backgroundColor: '#DCFCE7',
-  },
-
-  mediumPrioritySelected: {
-    borderColor: '#FDE68A',
-    backgroundColor: '#FEF3C7',
-  },
-
-  highPrioritySelected: {
-    borderColor: '#FCA5A5',
-    backgroundColor: '#FEE2E2',
+    borderColor: colors.border,
+    borderRadius: radius.input,
+    backgroundColor: colors.surfaceStrong,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   optionText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-
-  scheduledText: {
-    color: '#92400E',
-  },
-
-  inProgressText: {
-    color: '#1D4ED8',
-  },
-
-  completedText: {
-    color: '#166534',
-  },
-
-  lowPriorityText: {
-    color: '#166534',
-  },
-
-  mediumPriorityText: {
-    color: '#92400E',
-  },
-
-  highPriorityText: {
-    color: '#991B1B',
+    marginLeft: spacing.sm,
+    color: colors.textSecondary,
+    fontSize: typography.size.sm,
+    lineHeight: typography.lineHeight.sm,
+    fontWeight: typography.weight.bold,
+    textAlign: 'center',
   },
 
   actions: {
     flexDirection: 'row',
     marginHorizontal: -4,
-    marginTop: 4,
-    marginBottom: 20,
+    marginTop: spacing.xs,
   },
 
-  actionButton: {
+  secondaryButton: {
     flex: 1,
-    paddingHorizontal: 4,
+    minHeight: spacing.touch,
+    marginHorizontal: 4,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.button,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceStrong,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  secondaryButtonText: {
+    marginLeft: spacing.sm,
+    color: colors.textSecondary,
+    fontSize: typography.size.sm,
+    lineHeight: typography.lineHeight.sm,
+    fontWeight: typography.weight.bold,
+  },
+
+  primaryButton: {
+    flex: 1.2,
+    minHeight: spacing.touch,
+    marginHorizontal: 4,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.button,
+    backgroundColor: ACCENT,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  primaryButtonText: {
+    marginLeft: spacing.sm,
+    color: colors.black,
+    fontSize: typography.size.sm,
+    lineHeight: typography.lineHeight.sm,
+    fontWeight: typography.weight.extraBold,
+  },
+
+  footerHint: {
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.md,
+    color: colors.textMuted,
+    fontSize: typography.size.xs,
+    lineHeight: typography.lineHeight.sm,
+    textAlign: 'center',
+  },
+
+  pressed: {
+    opacity: 0.72,
+  },
+
+  buttonPressed: {
+    opacity: 0.84,
+    transform: [{scale: 0.985}],
   },
 });
 

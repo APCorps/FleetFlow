@@ -1,23 +1,28 @@
-import React from 'react';
+import React, {useMemo, useState} from 'react';
 
 import {
   Alert,
+  LayoutAnimation,
+  Platform,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
+  UIManager,
   View,
 } from 'react-native';
+
+import {SafeAreaView} from 'react-native-safe-area-context';
+
+import {
+  MaterialDesignIcons,
+} from '@react-native-vector-icons/material-design-icons/static';
 
 import {useNavigation} from '@react-navigation/native';
 import type {
   NativeStackNavigationProp,
 } from '@react-navigation/native-stack';
-
-import {
-  MaterialDesignIcons,
-} from '@react-native-vector-icons/material-design-icons/static';
 
 import {
   colors,
@@ -35,28 +40,86 @@ import type {
 } from '../../navigation/AppNavigator';
 
 type MaintenanceNavigationProp =
-  NativeStackNavigationProp<
-    RootStackParamList
-  >;
+  NativeStackNavigationProp<RootStackParamList>;
 
 type IconName = React.ComponentProps<
   typeof MaterialDesignIcons
 >['name'];
 
-const ACCENT = '#FF9F1C';
+type StatusFilter =
+  | 'All'
+  | 'Scheduled'
+  | 'In Progress'
+  | 'Completed'
+  | 'Overdue';
+
+type PriorityFilter =
+  | 'All'
+  | 'High'
+  | 'Medium'
+  | 'Low';
+
+type DateFilter =
+  | 'all'
+  | '1m'
+  | '3m'
+  | '6m'
+  | '1y';
+
+type FilterState = {
+  status: StatusFilter;
+  priority: PriorityFilter;
+  vehicleId: string;
+  date: DateFilter;
+};
+
+const ACCENT = colors.categories.maintenance;
 
 const STATUS = {
   scheduled: '#F59E0B',
-  inProgress: '#3B82F6',
-  completed: '#00D6A3',
-  fallback: '#94A3B8',
+  inProgress: '#5B8CFF',
+  completed: '#39E6C4',
+  overdue: '#FF6685',
+  fallback: '#6F7892',
 } as const;
 
 const PRIORITY = {
-  high: '#EF4444',
-  medium: '#F59E0B',
-  low: '#00D6A3',
+  high: '#FF6685',
+  medium: '#FFC857',
+  low: '#39E6C4',
 } as const;
+
+const SURFACES = {
+  surface: 'rgba(18, 24, 46, 0.92)',
+  elevated: 'rgba(20, 26, 49, 0.96)',
+  stronger: '#10182B',
+  border: colors.border,
+  borderStrong: colors.borderStrong,
+} as const;
+
+const DATE_FILTERS: Array<{
+  id: DateFilter;
+  label: string;
+  days: number | null;
+}> = [
+  {id: 'all', label: 'All time', days: null},
+  {id: '1m', label: '1 month', days: 30},
+  {id: '3m', label: '3 months', days: 90},
+  {id: '6m', label: '6 months', days: 182},
+  {id: '1y', label: '1 year', days: 365},
+];
+
+if (
+  Platform.OS === 'android' &&
+  UIManager.setLayoutAnimationEnabledExperimental
+) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+const alpha = (
+  hex: string,
+  value: string,
+) => `${hex}${value}`;
 
 const getStatusColor = (status: string) => {
   switch (status) {
@@ -82,10 +145,65 @@ const getPriorityColor = (priority: string) => {
   }
 };
 
-const alpha = (hex: string, value: string) =>
-  `${hex}${value}`;
+const formatDate = (value: string) => {
+  const date = new Date(value);
 
-const MaintenanceScreen = () => {
+  if (Number.isNaN(date.getTime())) {
+    return '—';
+  }
+
+  return date.toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+};
+
+const getStartOfDay = (date: Date) => {
+  const next = new Date(date);
+  next.setHours(0, 0, 0, 0);
+  return next;
+};
+
+const isOverdueRecord = (
+  record: {
+    status: string;
+    scheduledDate: string;
+  },
+  now = new Date(),
+) => {
+  if (record.status === 'Completed') {
+    return false;
+  }
+
+  const scheduled = new Date(record.scheduledDate);
+
+  if (Number.isNaN(scheduled.getTime())) {
+    return false;
+  }
+
+  return (
+    getStartOfDay(scheduled).getTime() <
+    getStartOfDay(now).getTime()
+  );
+};
+
+const getDateWindowDays = (
+  date: DateFilter,
+) => {
+  return (
+    DATE_FILTERS.find(item => item.id === date)
+      ?.days ?? null
+  );
+};
+
+type MaintenanceScreenProps = {
+  onNavigateToDashboard?: () => void;
+};
+
+const MaintenanceScreen = ({
+  onNavigateToDashboard,
+}: MaintenanceScreenProps) => {
   const navigation =
     useNavigation<MaintenanceNavigationProp>();
 
@@ -95,6 +213,21 @@ const MaintenanceScreen = () => {
   } = useMaintenance();
 
   const {vehicles} = useVehicles();
+
+  const [searchQuery, setSearchQuery] =
+    useState('');
+
+  const [filters, setFilters] = useState<FilterState>({
+    status: 'All',
+    priority: 'All',
+    vehicleId: 'All',
+    date: 'all',
+  });
+
+  const [filtersExpanded, setFiltersExpanded] =
+    useState(false);
+
+  const now = new Date();
 
   const scheduledCount =
     maintenanceRecords.filter(
@@ -111,10 +244,25 @@ const MaintenanceScreen = () => {
       record => record.status === 'Completed',
     ).length;
 
+  const overdueCount =
+    maintenanceRecords.filter(record =>
+      isOverdueRecord(record, now),
+    ).length;
+
   const highPriorityCount =
     maintenanceRecords.filter(
       record => record.priority === 'High',
     ).length;
+
+  const totalCost =
+    maintenanceRecords.reduce(
+      (total, record) =>
+        total +
+        (typeof record.cost === 'number'
+          ? record.cost
+          : 0),
+      0,
+    );
 
   const getVehicleRegistration = (
     vehicleId: string,
@@ -127,6 +275,133 @@ const MaintenanceScreen = () => {
       vehicle?.registrationNumber ??
       'Unknown vehicle'
     );
+  };
+
+  const activeFilterCount =
+    (filters.status !== 'All' ? 1 : 0) +
+    (filters.priority !== 'All' ? 1 : 0) +
+    (filters.vehicleId !== 'All' ? 1 : 0) +
+    (filters.date !== 'all' ? 1 : 0);
+
+  const filteredRecords = useMemo(() => {
+    const normalizedSearch =
+      searchQuery.trim().toLowerCase();
+
+    const dateWindowDays =
+      getDateWindowDays(filters.date);
+
+    return maintenanceRecords.filter(record => {
+      const registration = getVehicleRegistration(
+        record.vehicleId,
+      );
+
+      const recordIsOverdue = isOverdueRecord(
+        record,
+        now,
+      );
+
+      const searchText = [
+        record.title,
+        record.description,
+        registration,
+        record.status,
+        record.priority,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+
+      const matchesSearch =
+        normalizedSearch.length === 0 ||
+        searchText.includes(normalizedSearch);
+
+      const matchesStatus =
+        filters.status === 'All' ||
+        (filters.status === 'Overdue'
+          ? recordIsOverdue
+          : record.status === filters.status);
+
+      const matchesPriority =
+        filters.priority === 'All' ||
+        record.priority === filters.priority;
+
+      const matchesVehicle =
+        filters.vehicleId === 'All' ||
+        record.vehicleId === filters.vehicleId;
+
+      const scheduledDate = new Date(
+        record.scheduledDate,
+      );
+
+      const matchesDate =
+        dateWindowDays === null ||
+        (Number.isNaN(scheduledDate.getTime())
+          ? false
+          : Math.abs(
+              getStartOfDay(scheduledDate).getTime() -
+                getStartOfDay(now).getTime(),
+            ) <=
+            dateWindowDays * 24 * 60 * 60 * 1000);
+
+      return (
+        matchesSearch &&
+        matchesStatus &&
+        matchesPriority &&
+        matchesVehicle &&
+        matchesDate
+      );
+    });
+  }, [
+    filters,
+    maintenanceRecords,
+    searchQuery,
+    vehicles,
+  ]);
+
+  const clearFilters = () => {
+    LayoutAnimation.configureNext(
+      LayoutAnimation.Presets.easeInEaseOut,
+    );
+
+    setFilters({
+      status: 'All',
+      priority: 'All',
+      vehicleId: 'All',
+      date: 'all',
+    });
+  };
+
+  const updateFilter = <K extends keyof FilterState>(
+    key: K,
+    value: FilterState[K],
+  ) => {
+    LayoutAnimation.configureNext(
+      LayoutAnimation.Presets.easeInEaseOut,
+    );
+
+    setFilters(current => ({
+      ...current,
+      [key]: value,
+    }));
+  };
+
+  const toggleFilters = () => {
+    LayoutAnimation.configureNext({
+      duration: 240,
+      create: {
+        type: LayoutAnimation.Types.easeInEaseOut,
+        property: LayoutAnimation.Properties.opacity,
+      },
+      update: {
+        type: LayoutAnimation.Types.easeInEaseOut,
+      },
+      delete: {
+        type: LayoutAnimation.Types.easeInEaseOut,
+        property: LayoutAnimation.Properties.opacity,
+      },
+    });
+
+    setFiltersExpanded(value => !value);
   };
 
   const handleDelete = (
@@ -152,25 +427,32 @@ const MaintenanceScreen = () => {
     );
   };
 
+  const formatCost = (value: number) =>
+    `₹${Math.abs(value).toLocaleString('en-IN')}`;
+
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView
+      style={styles.container}
+      edges={['top', 'left', 'right']}>
       <ScrollView
         contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}>
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Go back"
-              hitSlop={8}
-              onPress={() => navigation.goBack()}
+              onPress={() =>
+                onNavigateToDashboard?.()
+              }
               style={({pressed}) => [
                 styles.backButton,
                 pressed && styles.pressed,
               ]}>
               <MaterialDesignIcons
                 name="arrow-left"
-                size={21}
+                size={20}
                 color={colors.textPrimary}
               />
             </Pressable>
@@ -184,73 +466,15 @@ const MaintenanceScreen = () => {
             </View>
 
             <View style={styles.headerCopy}>
+              <Text style={styles.eyebrow}>
+                FLEET CARE
+              </Text>
               <Text style={styles.title}>
                 Maintenance
               </Text>
               <Text style={styles.subtitle}>
-                Keep your fleet service-ready
+                Service readiness across the fleet
               </Text>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.summaryRow}>
-          <View style={styles.summaryCard}>
-            <View style={styles.summaryHeader}>
-              <View style={styles.summaryIcon}>
-                <MaterialDesignIcons
-                  name="wrench-outline"
-                  size={21}
-                  color={ACCENT}
-                />
-              </View>
-
-              <View style={styles.summaryCopy}>
-                <Text style={styles.summaryLabel}>
-                  TOTAL RECORDS
-                </Text>
-                <Text style={styles.summaryValue}>
-                  {maintenanceRecords.length}
-                </Text>
-              </View>
-
-              {highPriorityCount > 0 && (
-                <View style={styles.alertBadge}>
-                  <MaterialDesignIcons
-                    name="alert-circle-outline"
-                    size={14}
-                    color={PRIORITY.high}
-                  />
-                  <Text style={styles.alertBadgeText}>
-                    {highPriorityCount}
-                  </Text>
-                </View>
-              )}
-            </View>
-
-            <View style={styles.summaryDivider} />
-
-            <View style={styles.metricsRow}>
-              <Metric
-                icon="calendar-outline"
-                label="Scheduled"
-                value={scheduledCount}
-                color={STATUS.scheduled}
-              />
-
-              <Metric
-                icon="progress-clock"
-                label="In progress"
-                value={inProgressCount}
-                color={STATUS.inProgress}
-              />
-
-              <Metric
-                icon="check-circle-outline"
-                label="Completed"
-                value={completedCount}
-                color={STATUS.completed}
-              />
             </View>
           </View>
 
@@ -261,24 +485,61 @@ const MaintenanceScreen = () => {
               navigation.navigate('AddMaintenance')
             }
             style={({pressed}) => [
-              styles.addButton,
+              styles.addHeaderButton,
               pressed && styles.pressed,
             ]}>
-            <View style={styles.addIconCircle}>
-              <MaterialDesignIcons
-                name="plus"
-                size={20}
-                color={ACCENT}
-              />
-            </View>
-            <Text style={styles.addButtonText}>
-              Add Maintenance
+            <MaterialDesignIcons
+              name="plus"
+              size={18}
+              color={colors.black}
+            />
+            <Text style={styles.addHeaderText}>
+              Add
             </Text>
           </Pressable>
         </View>
 
-        <View style={styles.sectionHeader}>
-          <View>
+        <View style={styles.metricsGrid}>
+          <MetricCard
+            icon="wrench-outline"
+            label="Records"
+            value={maintenanceRecords.length}
+            color={ACCENT}
+          />
+          <MetricCard
+            icon="calendar-outline"
+            label="Scheduled"
+            value={scheduledCount}
+            color={STATUS.scheduled}
+          />
+          <MetricCard
+            icon="progress-clock"
+            label="In progress"
+            value={inProgressCount}
+            color={STATUS.inProgress}
+          />
+          <MetricCard
+            icon="alert-circle-outline"
+            label="Overdue"
+            value={overdueCount}
+            color={STATUS.overdue}
+          />
+          <MetricCard
+            icon="check-circle-outline"
+            label="Completed"
+            value={completedCount}
+            color={STATUS.completed}
+          />
+          <MetricCard
+            icon="cash-outline"
+            label="Total cost"
+            value={formatCost(totalCost)}
+            color={colors.electricCyan}
+          />
+        </View>
+
+        <View style={styles.controlsHeader}>
+          <View style={styles.serviceCopy}>
             <Text style={styles.sectionEyebrow}>
               SERVICE LOG
             </Text>
@@ -287,241 +548,468 @@ const MaintenanceScreen = () => {
             </Text>
           </View>
 
-          <View style={styles.countBadge}>
-            <Text style={styles.countBadgeText}>
-              {maintenanceRecords.length}
-            </Text>
-          </View>
+          <Text style={styles.resultCount}>
+            {filteredRecords.length} shown
+          </Text>
         </View>
 
-        {maintenanceRecords.map(record => {
-          const statusColor = getStatusColor(
-            record.status,
-          );
-          const priorityColor = getPriorityColor(
-            record.priority,
-          );
-          const registration =
-            getVehicleRegistration(record.vehicleId);
+        <View style={styles.searchRow}>
+          <View style={styles.searchField}>
+            <MaterialDesignIcons
+              name="magnify"
+              size={19}
+              color={colors.textMuted}
+            />
+            <TextInput
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholder="Search maintenance, vehicle…"
+              placeholderTextColor={colors.textMuted}
+              style={styles.searchInput}
+              autoCorrect={false}
+              autoCapitalize="none"
+              returnKeyType="search"
+              accessibilityLabel="Search maintenance records"
+            />
+            {searchQuery.length > 0 && (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Clear search"
+                onPress={() => setSearchQuery('')}
+                style={styles.searchClearButton}>
+                <MaterialDesignIcons
+                  name="close"
+                  size={16}
+                  color={colors.textMuted}
+                />
+              </Pressable>
+            )}
+          </View>
 
-          return (
-            <View
-              key={record.id}
-              style={styles.recordCard}>
-              <View
-                style={[
-                  styles.recordAccent,
-                  {
-                    backgroundColor: statusColor,
-                  },
-                ]}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Toggle maintenance filters"
+            onPress={toggleFilters}
+            style={({pressed}) => [
+              styles.filterToggle,
+              filtersExpanded &&
+                styles.filterToggleActive,
+              pressed && styles.pressed,
+            ]}>
+            <MaterialDesignIcons
+              name="tune-variant"
+              size={18}
+              color={
+                filtersExpanded || activeFilterCount > 0
+                  ? ACCENT
+                  : colors.textSecondary
+              }
+            />
+            <Text
+              style={[
+                styles.filterToggleText,
+                (filtersExpanded ||
+                  activeFilterCount > 0) &&
+                  styles.filterToggleTextActive,
+              ]}>
+              Filters
+            </Text>
+            {activeFilterCount > 0 && (
+              <View style={styles.filterCountBadge}>
+                <Text style={styles.filterCountText}>
+                  {activeFilterCount}
+                </Text>
+              </View>
+            )}
+            <MaterialDesignIcons
+              name={
+                filtersExpanded
+                  ? 'chevron-up'
+                  : 'chevron-down'
+              }
+              size={18}
+              color={colors.textMuted}
+            />
+          </Pressable>
+        </View>
+
+        {filtersExpanded && (
+          <View style={styles.filtersPanel}>
+            <FilterSection
+              title="Status"
+              options={[
+                'All',
+                'Scheduled',
+                'In Progress',
+                'Completed',
+                'Overdue',
+              ]}
+              selected={filters.status}
+              onSelect={value =>
+                updateFilter('status', value as StatusFilter)
+              }
+              getColor={value =>
+                value === 'Overdue'
+                  ? STATUS.overdue
+                  : value === 'All'
+                  ? colors.textSecondary
+                  : getStatusColor(value)
+              }
+            />
+
+            <FilterSection
+              title="Priority"
+              options={[
+                'All',
+                'High',
+                'Medium',
+                'Low',
+              ]}
+              selected={filters.priority}
+              onSelect={value =>
+                updateFilter(
+                  'priority',
+                  value as PriorityFilter,
+                )
+              }
+              getColor={value =>
+                value === 'All'
+                  ? colors.textSecondary
+                  : getPriorityColor(value)
+              }
+            />
+
+            <FilterSection
+              title="Window"
+              options={DATE_FILTERS.map(item => item.label)}
+              selected={
+                DATE_FILTERS.find(
+                  item => item.id === filters.date,
+                )?.label ?? 'All time'
+              }
+              onSelect={label => {
+                const selected = DATE_FILTERS.find(
+                  item => item.label === label,
+                );
+                if (selected) {
+                  updateFilter('date', selected.id);
+                }
+              }}
+              getColor={() => ACCENT}
+              horizontal
+            />
+
+            <View style={styles.vehicleFilterBlock}>
+              <View style={styles.filterSectionHeader}>
+                <Text style={styles.filterSectionTitle}>
+                  Vehicle
+                </Text>
+                {filters.vehicleId !== 'All' && (
+                  <Pressable
+                    onPress={() =>
+                      updateFilter('vehicleId', 'All')
+                    }>
+                    <Text style={styles.clearSmallText}>
+                      Reset
+                    </Text>
+                  </Pressable>
+                )}
+              </View>
+
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.chipScrollContent}>
+                <FilterChip
+                  label="All"
+                  selected={filters.vehicleId === 'All'}
+                  onPress={() =>
+                    updateFilter('vehicleId', 'All')
+                  }
+                  color={colors.textSecondary}
+                />
+                {vehicles.map(vehicle => (
+                  <FilterChip
+                    key={vehicle.id}
+                    label={vehicle.registrationNumber}
+                    selected={
+                      filters.vehicleId === vehicle.id
+                    }
+                    onPress={() =>
+                      updateFilter(
+                        'vehicleId',
+                        vehicle.id,
+                      )
+                    }
+                    color={ACCENT}
+                  />
+                ))}
+              </ScrollView>
+            </View>
+
+            <View style={styles.filterFooter}>
+              <Text style={styles.filterSummaryText}>
+                {activeFilterCount === 0
+                  ? 'All maintenance records'
+                  : `${activeFilterCount} active filter${
+                      activeFilterCount > 1 ? 's' : ''
+                    }`}
+              </Text>
+              {activeFilterCount > 0 && (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Clear maintenance filters"
+                  onPress={clearFilters}
+                  style={({pressed}) => [
+                    styles.clearButton,
+                    pressed && styles.pressed,
+                  ]}>
+                  <MaterialDesignIcons
+                    name="filter-remove-outline"
+                    size={16}
+                    color={ACCENT}
+                  />
+                  <Text style={styles.clearButtonText}>
+                    Clear
+                  </Text>
+                </Pressable>
+              )}
+            </View>
+          </View>
+        )}
+
+        {filteredRecords.length === 0 ? (
+          <View style={styles.emptyCard}>
+            <View style={styles.emptyIcon}>
+              <MaterialDesignIcons
+                name="wrench-outline"
+                size={27}
+                color={ACCENT}
               />
+            </View>
+            <Text style={styles.emptyTitle}>
+              No matching maintenance
+            </Text>
+            <Text style={styles.emptyText}>
+              Try a different search or clear your filters.
+            </Text>
+            {maintenanceRecords.length === 0 ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Add maintenance"
+                onPress={() =>
+                  navigation.navigate('AddMaintenance')
+                }
+                style={({pressed}) => [
+                  styles.emptyAddButton,
+                  pressed && styles.pressed,
+                ]}>
+                <MaterialDesignIcons
+                  name="plus"
+                  size={17}
+                  color={colors.black}
+                />
+                <Text style={styles.emptyAddText}>
+                  Add Maintenance
+                </Text>
+              </Pressable>
+            ) : activeFilterCount > 0 ? (
+              <Pressable
+                onPress={clearFilters}
+                style={({pressed}) => [
+                  styles.emptySecondaryButton,
+                  pressed && styles.pressed,
+                ]}>
+                <Text style={styles.emptySecondaryText}>
+                  Clear filters
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : (
+          filteredRecords.map(record => {
+            const recordOverdue = isOverdueRecord(
+              record,
+              now,
+            );
+            const statusColor = recordOverdue
+              ? STATUS.overdue
+              : getStatusColor(record.status);
+            const priorityColor = getPriorityColor(
+              record.priority,
+            );
+            const registration =
+              getVehicleRegistration(record.vehicleId);
 
-              <View style={styles.recordTopRow}>
-                <View style={styles.recordIdentity}>
-                  <View style={styles.recordIcon}>
-                    <MaterialDesignIcons
-                      name="wrench-outline"
-                      size={18}
-                      color={ACCENT}
-                    />
+            return (
+              <View
+                key={record.id}
+                style={styles.recordCard}>
+                <View
+                  style={[
+                    styles.recordAccent,
+                    {backgroundColor: statusColor},
+                  ]}
+                />
+
+                <View style={styles.recordTopRow}>
+                  <View style={styles.recordIdentity}>
+                    <View style={styles.recordIcon}>
+                      <MaterialDesignIcons
+                        name="wrench-outline"
+                        size={18}
+                        color={ACCENT}
+                      />
+                    </View>
+
+                    <View style={styles.recordTextBlock}>
+                      <Text
+                        style={styles.recordTitle}
+                        numberOfLines={1}>
+                        {record.title}
+                      </Text>
+
+                      <View style={styles.vehicleRow}>
+                        <MaterialDesignIcons
+                          name="truck-outline"
+                          size={14}
+                          color={colors.textMuted}
+                        />
+                        <Text
+                          style={styles.vehicleText}
+                          numberOfLines={1}>
+                          {registration}
+                        </Text>
+                      </View>
+                    </View>
                   </View>
 
-                  <View style={styles.recordTextBlock}>
-                    <Text
-                      style={styles.recordTitle}
-                      numberOfLines={1}>
-                      {record.title}
-                    </Text>
-
-                    <View style={styles.vehicleRow}>
-                      <MaterialDesignIcons
-                        name="truck-outline"
-                        size={14}
-                        color={colors.textMuted}
+                  <View style={styles.badgeColumn}>
+                    <StatusBadge
+                      label={
+                        recordOverdue
+                          ? 'Overdue'
+                          : record.status
+                      }
+                      color={statusColor}
+                    />
+                    <View
+                      style={[
+                        styles.priorityBadge,
+                        {
+                          backgroundColor: alpha(
+                            priorityColor,
+                            '12',
+                          ),
+                          borderColor: alpha(
+                            priorityColor,
+                            '26',
+                          ),
+                        },
+                      ]}>
+                      <View
+                        style={[
+                          styles.priorityDot,
+                          {
+                            backgroundColor:
+                              priorityColor,
+                          },
+                        ]}
                       />
                       <Text
-                        style={styles.vehicleText}
-                        numberOfLines={1}>
-                        {registration}
+                        style={[
+                          styles.priorityText,
+                          {color: priorityColor},
+                        ]}>
+                        {record.priority}
                       </Text>
                     </View>
                   </View>
                 </View>
 
-                <View
-                  style={[
-                    styles.statusBadge,
-                    {
-                      backgroundColor: alpha(
-                        statusColor,
-                        '18',
-                      ),
-                      borderColor: alpha(
-                        statusColor,
-                        '36',
-                      ),
-                    },
-                  ]}>
-                  <View
-                    style={[
-                      styles.statusDot,
-                      {
-                        backgroundColor:
-                          statusColor,
-                      },
-                    ]}
+                <Text
+                  style={styles.description}
+                  numberOfLines={3}>
+                  {record.description}
+                </Text>
+
+                <View style={styles.detailGrid}>
+                  <RecordDetail
+                    icon="calendar-outline"
+                    label="Scheduled"
+                    value={formatDate(
+                      record.scheduledDate,
+                    )}
                   />
-                  <Text
-                    style={[
-                      styles.statusText,
-                      {color: statusColor},
+                  <RecordDetail
+                    icon="counter"
+                    label="Mileage"
+                    value={
+                      record.mileage !== undefined
+                        ? `${record.mileage.toLocaleString('en-IN')} km`
+                        : '—'
+                    }
+                  />
+                  <RecordDetail
+                    icon="cash-outline"
+                    label="Cost"
+                    value={
+                      record.cost !== undefined
+                        ? formatCost(record.cost)
+                        : '—'
+                    }
+                    color={
+                      record.cost !== undefined
+                        ? ACCENT
+                        : undefined
+                    }
+                  />
+                </View>
+
+                <View style={styles.actionsRow}>
+                  <ActionButton
+                    icon="eye-outline"
+                    label="View"
+                    onPress={() =>
+                      navigation.navigate(
+                        'MaintenanceDetails',
+                        {maintenance: record},
+                      )
+                    }
+                  />
+                  <ActionButton
+                    icon="pencil-outline"
+                    label="Edit"
+                    onPress={() =>
+                      navigation.navigate(
+                        'EditMaintenance',
+                        {maintenance: record},
+                      )
+                    }
+                  />
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Delete ${record.title}`}
+                    onPress={() =>
+                      handleDelete(
+                        record.id,
+                        record.title,
+                      )
+                    }
+                    style={({pressed}) => [
+                      styles.deleteAction,
+                      pressed && styles.pressed,
                     ]}>
-                    {record.status}
-                  </Text>
+                    <MaterialDesignIcons
+                      name="delete-outline"
+                      size={18}
+                      color={PRIORITY.high}
+                    />
+                  </Pressable>
                 </View>
               </View>
-
-              <Text
-                style={styles.description}
-                numberOfLines={3}>
-                {record.description}
-              </Text>
-
-              <View style={styles.infoRow}>
-                <InfoItem
-                  icon="flag-outline"
-                  label="Priority"
-                  value={record.priority}
-                  valueColor={priorityColor}
-                />
-
-                <InfoItem
-                  icon="calendar-outline"
-                  label="Scheduled"
-                  value={new Date(
-                    record.scheduledDate,
-                  ).toLocaleDateString()}
-                />
-              </View>
-
-              {(record.mileage !== undefined ||
-                record.cost !== undefined ||
-                record.completedDate) && (
-                <View style={styles.detailRow}>
-                  {record.mileage !== undefined && (
-                    <DetailItem
-                      icon="counter"
-                      label="Mileage"
-                      value={`${record.mileage.toLocaleString()} km`}
-                    />
-                  )}
-
-                  {record.cost !== undefined && (
-                    <DetailItem
-                      icon="cash-outline"
-                      label="Cost"
-                      value={`₹${record.cost.toLocaleString()}`}
-                    />
-                  )}
-
-                  {record.completedDate && (
-                    <DetailItem
-                      icon="check-outline"
-                      label="Completed"
-                      value={new Date(
-                        record.completedDate,
-                      ).toLocaleDateString()}
-                    />
-                  )}
-                </View>
-              )}
-
-              <View style={styles.actionsRow}>
-                <ActionButton
-                  icon="eye-outline"
-                  label="View"
-                  onPress={() =>
-                    navigation.navigate(
-                      'MaintenanceDetails',
-                      {maintenance: record},
-                    )
-                  }
-                />
-
-                <ActionButton
-                  icon="pencil-outline"
-                  label="Edit"
-                  onPress={() =>
-                    navigation.navigate(
-                      'EditMaintenance',
-                      {maintenance: record},
-                    )
-                  }
-                />
-
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={`Delete ${record.title}`}
-                  onPress={() =>
-                    handleDelete(
-                      record.id,
-                      record.title,
-                    )
-                  }
-                  style={({pressed}) => [
-                    styles.deleteAction,
-                    pressed && styles.pressed,
-                  ]}>
-                  <MaterialDesignIcons
-                    name="delete-outline"
-                    size={18}
-                    color={PRIORITY.high}
-                  />
-                </Pressable>
-              </View>
-            </View>
-          );
-        })}
-
-        {maintenanceRecords.length === 0 && (
-          <View style={styles.emptyCard}>
-            <View style={styles.emptyIcon}>
-              <MaterialDesignIcons
-                name="wrench-outline"
-                size={28}
-                color={ACCENT}
-              />
-            </View>
-
-            <Text style={styles.emptyTitle}>
-              No maintenance records
-            </Text>
-
-            <Text style={styles.emptyText}>
-              Your fleet currently has no maintenance records.
-            </Text>
-
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Add your first maintenance record"
-              onPress={() =>
-                navigation.navigate('AddMaintenance')
-              }
-              style={({pressed}) => [
-                styles.emptyAddButton,
-                pressed && styles.pressed,
-              ]}>
-              <MaterialDesignIcons
-                name="plus"
-                size={17}
-                color="#1B1205"
-              />
-              <Text style={styles.emptyAddText}>
-                Add Maintenance
-              </Text>
-            </Pressable>
-          </View>
+            );
+          })
         )}
 
         <View style={styles.bottomSpacer} />
@@ -530,98 +1018,195 @@ const MaintenanceScreen = () => {
   );
 };
 
-type MetricProps = {
+type MetricCardProps = {
   icon: IconName;
   label: string;
-  value: number;
+  value: number | string;
   color: string;
 };
 
-const Metric = ({
+const MetricCard = ({
   icon,
   label,
   value,
   color,
-}: MetricProps) => (
-  <View style={styles.metric}>
+}: MetricCardProps) => (
+  <View style={styles.metricCard}>
     <View
       style={[
         styles.metricIcon,
-        {backgroundColor: alpha(color, '16')},
+        {backgroundColor: alpha(color, '14')},
       ]}>
       <MaterialDesignIcons
         name={icon}
-        size={15}
+        size={16}
         color={color}
       />
     </View>
-    <View style={styles.metricCopy}>
-      <Text style={[styles.metricValue, {color}]}>
-        {value}
-      </Text>
-      <Text style={styles.metricLabel}>
-        {label}
-      </Text>
-    </View>
-  </View>
-);
-
-type InfoItemProps = {
-  icon: IconName;
-  label: string;
-  value: string;
-  valueColor?: string;
-};
-
-const InfoItem = ({
-  icon,
-  label,
-  value,
-  valueColor,
-}: InfoItemProps) => (
-  <View style={styles.infoItem}>
-    <MaterialDesignIcons
-      name={icon}
-      size={15}
-      color={valueColor ?? colors.textMuted}
-    />
-    <Text style={styles.infoLabel}>
-      {label}
-    </Text>
-    <Text
-      style={[
-        styles.infoValue,
-        valueColor && {color: valueColor},
-      ]}>
+    <Text style={[styles.metricValue, {color}]}
+      numberOfLines={1}
+      adjustsFontSizeToFit>
       {value}
     </Text>
+    <Text style={styles.metricLabel}>
+      {label}
+    </Text>
   </View>
 );
 
-type DetailItemProps = {
+type FilterSectionProps = {
+  title: string;
+  options: string[];
+  selected: string;
+  onSelect: (value: string) => void;
+  getColor: (value: string) => string;
+  horizontal?: boolean;
+};
+
+const FilterSection = ({
+  title,
+  options,
+  selected,
+  onSelect,
+  getColor,
+  horizontal,
+}: FilterSectionProps) => {
+  const content = options.map(option => (
+    <FilterChip
+      key={option}
+      label={option}
+      selected={selected === option}
+      onPress={() => onSelect(option)}
+      color={getColor(option)}
+    />
+  ));
+
+  return (
+    <View style={styles.filterSectionBlock}>
+      <Text style={styles.filterSectionTitle}>
+        {title}
+      </Text>
+      {horizontal ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.chipScrollContent}>
+          {content}
+        </ScrollView>
+      ) : (
+        <View style={styles.chipWrap}>
+          {content}
+        </View>
+      )}
+    </View>
+  );
+};
+
+type FilterChipProps = {
+  label: string;
+  selected: boolean;
+  color: string;
+  onPress: () => void;
+};
+
+const FilterChip = ({
+  label,
+  selected,
+  color,
+  onPress,
+}: FilterChipProps) => (
+  <Pressable
+    accessibilityRole="button"
+    accessibilityState={{selected}}
+    onPress={onPress}
+    style={({pressed}) => [
+      styles.filterChip,
+      selected && {
+        backgroundColor: alpha(color, '16'),
+        borderColor: alpha(color, '48'),
+      },
+      pressed && styles.pressed,
+    ]}>
+    {selected && (
+      <MaterialDesignIcons
+        name="check"
+        size={13}
+        color={color}
+      />
+    )}
+    <Text
+      style={[
+        styles.filterChipText,
+        selected && {color},
+      ]}>
+      {label}
+    </Text>
+  </Pressable>
+);
+
+type StatusBadgeProps = {
+  label: string;
+  color: string;
+};
+
+const StatusBadge = ({
+  label,
+  color,
+}: StatusBadgeProps) => (
+  <View
+    style={[
+      styles.statusBadge,
+      {
+        backgroundColor: alpha(color, '14'),
+        borderColor: alpha(color, '30'),
+      },
+    ]}>
+    <View
+      style={[
+        styles.statusDot,
+        {backgroundColor: color},
+      ]}
+    />
+    <Text
+      style={[
+        styles.statusText,
+        {color},
+      ]}>
+      {label}
+    </Text>
+  </View>
+);
+
+type RecordDetailProps = {
   icon: IconName;
   label: string;
   value: string;
+  color?: string;
 };
 
-const DetailItem = ({
+const RecordDetail = ({
   icon,
   label,
   value,
-}: DetailItemProps) => (
+  color,
+}: RecordDetailProps) => (
   <View style={styles.detailItem}>
     <MaterialDesignIcons
       name={icon}
       size={15}
-      color={colors.textMuted}
+      color={color ?? colors.textMuted}
     />
     <View style={styles.detailCopy}>
       <Text style={styles.detailLabel}>
         {label}
       </Text>
       <Text
-        style={styles.detailValue}
-        numberOfLines={1}>
+        style={[
+          styles.detailValue,
+          color && {color},
+        ]}
+        numberOfLines={1}
+        adjustsFontSizeToFit>
         {value}
       </Text>
     </View>
@@ -661,229 +1246,160 @@ const ActionButton = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#070D18',
+    backgroundColor: colors.background,
   },
 
   content: {
-    paddingHorizontal: 18,
-    paddingTop: 10,
-    paddingBottom: 30,
+    paddingHorizontal: spacing.screen,
+    paddingTop: spacing.sm,
+    paddingBottom: 136,
   },
 
   header: {
-    marginBottom: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.lg,
   },
 
   headerLeft: {
-    minHeight: 52,
+    flex: 1,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
   },
 
   backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    backgroundColor: '#0B1423',
+    width: spacing.touch,
+    height: spacing.touch,
+    borderRadius: radius.md,
+    backgroundColor: SURFACES.stronger,
     borderWidth: 1,
-    borderColor: '#1B2A40',
+    borderColor: SURFACES.border,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 10,
+    marginRight: spacing.sm,
   },
 
   headerIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    backgroundColor: '#261A0A',
+    width: spacing.huge,
+    height: spacing.huge,
+    borderRadius: radius.lg,
+    backgroundColor: alpha(ACCENT, '14'),
     borderWidth: 1,
-    borderColor: '#4A3211',
+    borderColor: alpha(ACCENT, '30'),
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 11,
+    marginRight: spacing.sm,
   },
 
   headerCopy: {
     flex: 1,
+    minWidth: 0,
   },
 
-  title: {
-    color: '#F8FAFC',
-    fontSize: 24,
-    lineHeight: 28,
-    fontWeight: '800',
-    letterSpacing: -0.3,
-  },
-
-  subtitle: {
-    marginTop: 3,
-    color: '#94A3B8',
-    fontSize: 12,
-    lineHeight: 17,
-    fontWeight: '500',
-  },
-
-  summaryRow: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    marginBottom: 20,
-  },
-
-  summaryCard: {
-    flex: 1,
-    backgroundColor: '#0B1423',
-    borderWidth: 1,
-    borderColor: '#1B2A40',
-    borderRadius: radius.xl,
-    padding: 14,
-    minHeight: 148,
-  },
-
-  summaryHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-
-  summaryIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 13,
-    backgroundColor: '#261A0A',
-    borderWidth: 1,
-    borderColor: '#4A3211',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
-  },
-
-  summaryCopy: {
-    flex: 1,
-  },
-
-  summaryLabel: {
-    color: '#667892',
+  eyebrow: {
+    color: colors.textMuted,
     fontSize: 9,
     lineHeight: 12,
     fontWeight: '800',
-    letterSpacing: 1,
+    letterSpacing: 1.1,
   },
 
-  summaryValue: {
+  title: {
     marginTop: 2,
-    color: '#F8FAFC',
-    fontSize: 24,
+    color: colors.textPrimary,
+    fontSize: 23,
     lineHeight: 27,
     fontWeight: '800',
+    letterSpacing: -0.25,
   },
 
-  alertBadge: {
-    minWidth: 30,
-    height: 28,
-    paddingHorizontal: 7,
-    borderRadius: 9,
-    backgroundColor: '#3D1A22',
-    borderWidth: 1,
-    borderColor: '#5A2631',
-    flexDirection: 'row',
+  subtitle: {
+    marginTop: 2,
+    color: colors.textSecondary,
+    fontSize: 11,
+    lineHeight: 16,
+    fontWeight: '500',
+  },
+
+  addHeaderButton: {
+    minWidth: spacing.huge,
+    height: spacing.touch,
+    marginLeft: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.button,
+    backgroundColor: ACCENT,
     alignItems: 'center',
     justifyContent: 'center',
+    flexDirection: 'row',
   },
 
-  alertBadgeText: {
-    marginLeft: 3,
-    color: PRIORITY.high,
+  addHeaderText: {
+    marginLeft: 5,
+    color: colors.black,
     fontSize: 11,
     fontWeight: '800',
   },
 
-  summaryDivider: {
-    height: 1,
-    backgroundColor: '#16263B',
-    marginVertical: 13,
+  metricsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginHorizontal: -4,
+    marginBottom: spacing.section,
   },
 
-  metricsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-
-  metric: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    minWidth: 0,
+  metricCard: {
+    width: '30.5%',
+    minHeight: 88,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.md,
+    borderWidth: 1,
+    borderColor: SURFACES.border,
+    backgroundColor: SURFACES.surface,
+    borderRadius: radius.lg,
+    marginBottom: spacing.sm,
+    marginHorizontal: 4,
   },
 
   metricIcon: {
     width: 28,
     height: 28,
-    borderRadius: 9,
+    borderRadius: radius.sm,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 6,
-  },
-
-  metricCopy: {
-    flex: 1,
-    minWidth: 0,
+    marginBottom: spacing.sm,
   },
 
   metricValue: {
+    color: colors.textPrimary,
     fontSize: 17,
-    lineHeight: 19,
+    lineHeight: 20,
     fontWeight: '800',
   },
 
   metricLabel: {
     marginTop: 1,
-    color: '#667892',
-    fontSize: 8,
-    lineHeight: 11,
+    color: colors.textMuted,
+    fontSize: 9,
+    lineHeight: 12,
     fontWeight: '700',
   },
 
-  addButton: {
-    width: 92,
-    marginLeft: 10,
-    borderRadius: radius.xl,
-    backgroundColor: '#261A0A',
-    borderWidth: 1,
-    borderColor: '#4A3211',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 8,
-  },
-
-  addIconCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 13,
-    backgroundColor: '#FF9F1C18',
-    borderWidth: 1,
-    borderColor: '#FF9F1C36',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 7,
-  },
-
-  addButtonText: {
-    color: ACCENT,
-    fontSize: 11,
-    lineHeight: 14,
-    fontWeight: '800',
-    textAlign: 'center',
-  },
-
-  sectionHeader: {
+  controlsHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     justifyContent: 'space-between',
-    marginBottom: 11,
+    marginBottom: spacing.md,
+  },
+
+  serviceCopy: {
+    flex: 1,
+    minWidth: 0,
   },
 
   sectionEyebrow: {
-    color: '#667892',
+    color: colors.textMuted,
     fontSize: 9,
     lineHeight: 12,
     fontWeight: '800',
@@ -892,46 +1408,218 @@ const styles = StyleSheet.create({
 
   sectionTitle: {
     marginTop: 2,
-    color: '#F8FAFC',
+    color: colors.textPrimary,
     fontSize: 17,
     lineHeight: 22,
     fontWeight: '800',
   },
 
-  countBadge: {
-    minWidth: 32,
-    height: 28,
-    borderRadius: 10,
-    backgroundColor: '#101B2D',
-    borderWidth: 1,
-    borderColor: '#1B2A40',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 8,
+  resultCount: {
+    marginLeft: spacing.sm,
+    color: colors.textMuted,
+    fontSize: 10,
+    fontWeight: '700',
   },
 
-  countBadgeText: {
-    color: '#94A3B8',
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
+
+  searchField: {
+    flex: 1,
+    minHeight: 46,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.input,
+    backgroundColor: SURFACES.surface,
+    borderWidth: 1,
+    borderColor: SURFACES.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  searchInput: {
+    flex: 1,
+    minWidth: 0,
+    marginLeft: spacing.sm,
+    paddingVertical: 0,
+    color: colors.textPrimary,
+    fontSize: 12,
+    fontWeight: '500',
+  },
+
+  searchClearButton: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  filterToggle: {
+    minHeight: 46,
+    marginLeft: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.input,
+    backgroundColor: SURFACES.surface,
+    borderWidth: 1,
+    borderColor: SURFACES.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  filterToggleActive: {
+    backgroundColor: alpha(ACCENT, '10'),
+    borderColor: alpha(ACCENT, '38'),
+  },
+
+  filterToggleText: {
+    marginLeft: 6,
+    color: colors.textSecondary,
     fontSize: 11,
+    fontWeight: '800',
+  },
+
+  filterToggleTextActive: {
+    color: ACCENT,
+  },
+
+  filterCountBadge: {
+    minWidth: 20,
+    height: 20,
+    marginLeft: 6,
+    paddingHorizontal: 5,
+    borderRadius: radius.pill,
+    backgroundColor: alpha(ACCENT, '20'),
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  filterCountText: {
+    color: ACCENT,
+    fontSize: 9,
+    fontWeight: '800',
+  },
+
+  filtersPanel: {
+    backgroundColor: SURFACES.elevated,
+    borderWidth: 1,
+    borderColor: SURFACES.border,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+  },
+
+  filterSectionBlock: {
+    marginBottom: spacing.md,
+  },
+
+  filterSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm,
+  },
+
+  filterSectionTitle: {
+    marginBottom: spacing.sm,
+    color: colors.textSoft,
+    fontSize: 10,
+    lineHeight: 13,
+    fontWeight: '800',
+    letterSpacing: 0.55,
+  },
+
+  clearSmallText: {
+    color: ACCENT,
+    fontSize: 10,
+    fontWeight: '800',
+  },
+
+  chipWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+
+  chipScrollContent: {
+    paddingRight: spacing.sm,
+  },
+
+  filterChip: {
+    minHeight: 36,
+    marginRight: spacing.sm,
+    marginBottom: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
+    backgroundColor: SURFACES.stronger,
+    borderWidth: 1,
+    borderColor: SURFACES.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+  },
+
+  filterChipText: {
+    marginLeft: 0,
+    color: colors.textSecondary,
+    fontSize: 10,
+    fontWeight: '800',
+  },
+
+  vehicleFilterBlock: {
+    marginBottom: spacing.md,
+  },
+
+  filterFooter: {
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderLight,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+
+  filterSummaryText: {
+    color: colors.textMuted,
+    fontSize: 10,
+    fontWeight: '700',
+  },
+
+  clearButton: {
+    minHeight: 34,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.button,
+    backgroundColor: alpha(ACCENT, '12'),
+    borderWidth: 1,
+    borderColor: alpha(ACCENT, '28'),
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+  },
+
+  clearButtonText: {
+    marginLeft: 5,
+    color: ACCENT,
+    fontSize: 10,
     fontWeight: '800',
   },
 
   recordCard: {
     position: 'relative',
     overflow: 'hidden',
-    backgroundColor: '#0B1D33',
+    marginBottom: spacing.md,
+    padding: spacing.card,
+    borderRadius: radius.card,
+    backgroundColor: SURFACES.surface,
     borderWidth: 1,
-    borderColor: '#1B2A40',
-    borderRadius: 18,
-    padding: 14,
-    marginBottom: 12,
+    borderColor: SURFACES.border,
   },
 
   recordAccent: {
     position: 'absolute',
     left: 0,
-    top: 16,
-    bottom: 16,
+    top: spacing.md,
+    bottom: spacing.md,
     width: 3,
     borderRadius: 2,
   },
@@ -943,21 +1631,21 @@ const styles = StyleSheet.create({
 
   recordIdentity: {
     flex: 1,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    minWidth: 0,
   },
 
   recordIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 13,
-    backgroundColor: '#261A0A',
+    width: 40,
+    height: 40,
+    marginRight: spacing.sm,
+    borderRadius: radius.lg,
+    backgroundColor: alpha(ACCENT, '12'),
     borderWidth: 1,
-    borderColor: '#4A3211',
+    borderColor: alpha(ACCENT, '28'),
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 10,
   },
 
   recordTextBlock: {
@@ -966,9 +1654,9 @@ const styles = StyleSheet.create({
   },
 
   recordTitle: {
-    color: '#F8FAFC',
-    fontSize: 16,
-    lineHeight: 20,
+    color: colors.textPrimary,
+    fontSize: 15,
+    lineHeight: 19,
     fontWeight: '800',
   },
 
@@ -981,20 +1669,24 @@ const styles = StyleSheet.create({
   vehicleText: {
     flex: 1,
     marginLeft: 4,
-    color: '#94A3B8',
-    fontSize: 11,
-    lineHeight: 15,
-    fontWeight: '600',
+    color: colors.textSecondary,
+    fontSize: 10,
+    lineHeight: 14,
+    fontWeight: '700',
+  },
+
+  badgeColumn: {
+    alignItems: 'flex-end',
+    marginLeft: spacing.sm,
   },
 
   statusBadge: {
-    minHeight: 28,
+    minHeight: 26,
     paddingHorizontal: 8,
-    borderRadius: 10,
+    borderRadius: radius.sm,
     borderWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    marginLeft: 8,
   },
 
   statusDot: {
@@ -1010,58 +1702,51 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 
-  description: {
-    marginTop: 12,
-    color: '#94A3B8',
-    fontSize: 12,
-    lineHeight: 18,
-  },
-
-  infoRow: {
+  priorityBadge: {
+    minHeight: 22,
+    marginTop: 5,
+    paddingHorizontal: 7,
+    borderRadius: radius.sm,
+    borderWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 12,
-    paddingTop: 11,
-    borderTopWidth: 1,
-    borderTopColor: '#16263B',
   },
 
-  infoItem: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    minWidth: 0,
+  priorityDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+    marginRight: 4,
   },
 
-  infoLabel: {
-    marginLeft: 5,
-    color: '#667892',
-    fontSize: 10,
-    fontWeight: '700',
-  },
-
-  infoValue: {
-    marginLeft: 4,
-    color: '#CBD5E1',
-    fontSize: 10,
+  priorityText: {
+    fontSize: 8,
+    lineHeight: 10,
     fontWeight: '800',
   },
 
-  detailRow: {
+  description: {
+    marginTop: spacing.md,
+    color: colors.textSecondary,
+    fontSize: 11,
+    lineHeight: 17,
+  },
+
+  detailGrid: {
     flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 10,
-    paddingTop: 10,
+    alignItems: 'stretch',
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
     borderTopWidth: 1,
-    borderTopColor: '#16263B',
+    borderTopColor: colors.borderLight,
   },
 
   detailItem: {
     flex: 1,
+    minWidth: 0,
+    paddingRight: spacing.sm,
     flexDirection: 'row',
     alignItems: 'center',
-    minWidth: 0,
-    paddingRight: 8,
   },
 
   detailCopy: {
@@ -1071,53 +1756,53 @@ const styles = StyleSheet.create({
   },
 
   detailLabel: {
-    color: '#667892',
+    color: colors.textMuted,
     fontSize: 8,
     lineHeight: 11,
     fontWeight: '700',
   },
 
   detailValue: {
-    marginTop: 1,
-    color: '#CBD5E1',
-    fontSize: 10,
-    lineHeight: 13,
+    marginTop: 2,
+    color: colors.textSoft,
+    fontSize: 9,
+    lineHeight: 12,
     fontWeight: '800',
   },
 
   actionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 12,
+    marginTop: spacing.md,
   },
 
   actionButton: {
-    height: 34,
     flex: 1,
-    flexDirection: 'row',
+    height: spacing.touch - 10,
+    marginRight: 7,
+    borderRadius: radius.button,
+    backgroundColor: SURFACES.stronger,
+    borderWidth: 1,
+    borderColor: SURFACES.border,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 10,
-    backgroundColor: '#101B2D',
-    borderWidth: 1,
-    borderColor: '#1B2A40',
-    marginRight: 7,
+    flexDirection: 'row',
   },
 
   actionText: {
     marginLeft: 5,
-    color: '#94A3B8',
+    color: colors.textSecondary,
     fontSize: 10,
     fontWeight: '800',
   },
 
   deleteAction: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    backgroundColor: '#3D1A22',
+    width: spacing.touch - 10,
+    height: spacing.touch - 10,
+    borderRadius: radius.button,
+    backgroundColor: alpha(PRIORITY.high, '12'),
     borderWidth: 1,
-    borderColor: '#5A2631',
+    borderColor: alpha(PRIORITY.high, '28'),
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1125,64 +1810,83 @@ const styles = StyleSheet.create({
   emptyCard: {
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#0B1D33',
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.huge,
+    borderRadius: radius.card,
+    backgroundColor: SURFACES.surface,
     borderWidth: 1,
-    borderColor: '#1B2A40',
-    borderRadius: 18,
-    paddingHorizontal: 24,
-    paddingVertical: 38,
+    borderColor: SURFACES.border,
   },
 
   emptyIcon: {
     width: 58,
     height: 58,
-    borderRadius: 18,
-    backgroundColor: '#261A0A',
+    borderRadius: radius.xl,
+    backgroundColor: alpha(ACCENT, '12'),
     borderWidth: 1,
-    borderColor: '#4A3211',
+    borderColor: alpha(ACCENT, '28'),
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 12,
+    marginBottom: spacing.md,
   },
 
   emptyTitle: {
-    color: '#F8FAFC',
-    fontSize: 17,
+    color: colors.textPrimary,
+    fontSize: 16,
+    lineHeight: 20,
     fontWeight: '800',
   },
 
   emptyText: {
-    marginTop: 6,
-    color: '#94A3B8',
-    fontSize: 12,
-    lineHeight: 18,
+    marginTop: spacing.sm,
+    color: colors.textSecondary,
+    fontSize: 11,
+    lineHeight: 17,
     textAlign: 'center',
   },
 
   emptyAddButton: {
-    minHeight: 38,
-    marginTop: 16,
-    paddingHorizontal: 14,
-    borderRadius: 11,
+    minHeight: spacing.touch,
+    marginTop: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.button,
     backgroundColor: ACCENT,
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    flexDirection: 'row',
   },
 
   emptyAddText: {
     marginLeft: 5,
-    color: '#1B1205',
-    fontSize: 11,
+    color: colors.black,
+    fontSize: 10,
+    fontWeight: '800',
+  },
+
+  emptySecondaryButton: {
+    minHeight: 38,
+    marginTop: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.button,
+    backgroundColor: SURFACES.stronger,
+    borderWidth: 1,
+    borderColor: SURFACES.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  emptySecondaryText: {
+    color: ACCENT,
+    fontSize: 10,
     fontWeight: '800',
   },
 
   bottomSpacer: {
-    height: 40,
+    height: 32,
   },
 
   pressed: {
-    opacity: 0.68,
+    opacity: 0.7,
   },
 });
 
