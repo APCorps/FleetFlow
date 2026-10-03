@@ -63,27 +63,87 @@ async def process_document(file: UploadFile = File(...)):
 
     file_content = await file.read()
 
+    # Tell Gemini to identify the document type first, then extract only relevant fields.
     prompt = """
-    Analyze this fleet document.
+    Analyze the uploaded fleet-related document.
 
-    Identify the document type and extract the important information.
+    First identify the document type.
 
-    Return ONLY valid JSON with this structure:
+    Then extract ONLY the fields that are actually present and relevant to that document type.
+
+    Return ONLY valid JSON using this structure:
 
     {
-      "document_type": "",
-      "registration_number": "",
-      "policy_number": "",
-      "insurer": "",
-      "policy_start": "",
-      "policy_expiry": "",
-      "invoice_number": "",
-      "invoice_date": "",
-      "amount": "",
-      "description": ""
+    "document_type": "",
+    "fields": {}
     }
 
-    If a field is not present, return an empty string.
+    Use these document types when applicable:
+
+    - vehicle_insurance
+    - vehicle_rc
+    - driving_licence
+    - aadhaar_card
+    - maintenance_invoice
+    - fuel_receipt
+    - transport_bill
+    - permit
+    - other
+
+    Examples:
+
+    For vehicle insurance:
+    {
+    "document_type": "vehicle_insurance",
+    "fields": {
+        "registration_number": "",
+        "policy_number": "",
+        "insurer": "",
+        "policy_start": "",
+        "policy_expiry": ""
+    }
+    }
+
+    For driving licence:
+    {
+    "document_type": "driving_licence",
+    "fields": {
+        "name": "",
+        "licence_number": "",
+        "transport_valid_until": "",
+        "non_transport_valid_until": ""
+    }
+    }
+
+    For Aadhaar:
+    {
+    "document_type": "aadhaar_card",
+    "fields": {
+        "name": "",
+        "aadhaar_number": ""
+    }
+    }
+
+    For maintenance invoice:
+    {
+    "document_type": "maintenance_invoice",
+    "fields": {
+        "invoice_number": "",
+        "invoice_date": "",
+        "vehicle_registration_number": "",
+        "vendor": "",
+        "description": "",
+        "amount": ""
+    }
+    }
+
+    Rules:
+    1. Do not put unrelated fields in the response.
+    2. Do not put extracted information inside a generic description field.
+    3. Only include fields relevant to the identified document type.
+    4. If a relevant field is not visible, use an empty string.
+    5. Do not guess or invent values.
+    6. Return JSON only.
     """
 
     # Request structured JSON directly from Gemini instead of Markdown-wrapped JSON.
