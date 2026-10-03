@@ -86,6 +86,7 @@ async def process_document(file: UploadFile = File(...)):
     If a field is not present, return an empty string.
     """
 
+    # Request structured JSON directly from Gemini instead of Markdown-wrapped JSON.
     response = client.models.generate_content(
         model="gemini-3.8-flash",
         contents=[
@@ -97,8 +98,10 @@ async def process_document(file: UploadFile = File(...)):
                 }
             },
         ],
+        config={
+            "response_mime_type": "application/json",
+        },
     )
-
     return {
         "message": "Document processed successfully.",
         "extracted_data": response.text,
