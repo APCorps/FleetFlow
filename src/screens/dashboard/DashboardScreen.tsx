@@ -35,6 +35,9 @@ import type {
   ImageLibraryOptions,
 } from 'react-native-image-picker';
 
+// Provides access to the centralized FleetFlow backend API methods.
+import {api} from '../../services/api';
+
 import {
   useAccounts,
   useAuth,
@@ -1141,36 +1144,51 @@ const DashboardScreen = ({
     });
   };
 
-  // Uploads a captured document image to the FleetFlow backend.
-  const uploadDocument = async (asset: Asset) => {
-    if (!asset.uri) {
-      throw new Error('Captured document has no URI.');
-    }
+  // Uploads a document and then processes the already-uploaded document with Gemini.
+const uploadDocument = async (asset: Asset) => {
+  if (!asset.uri) {
+    throw new Error('Captured document has no URI.');
+  }
 
-    const formData = new FormData();
+  const formData = new FormData();
 
-    formData.append('file', {
-      uri: asset.uri,
-      type: asset.type || 'image/jpeg',
-      name: asset.fileName || `document-${Date.now()}.jpg`,
-    } as any);
+  formData.append('file', {
+    uri: asset.uri,
+    type: asset.type || 'image/jpeg',
+    name: asset.fileName || `document-${Date.now()}.jpg`,
+  } as any);
 
-    const response = await fetch(
-      'https://fleetflowapi.onrender.com/documents/upload',
-      {
-        method: 'POST',
-        body: formData,
-      },
+  // Step 1: Upload the document and receive its unique document ID.
+  const uploadResponse = await fetch(
+    'https://fleetflowapi.onrender.com/documents/upload',
+    {
+      method: 'POST',
+      body: formData,
+    },
+  );
+
+  const uploadData = await uploadResponse.json();
+
+  if (!uploadResponse.ok) {
+    throw new Error(
+      uploadData.detail || 'Document upload failed.',
     );
+  }
 
-    const data = await response.json();
+  if (!uploadData.document_id) {
+    throw new Error(
+      'Document uploaded but no document ID was returned.',
+    );
+  }
 
-    if (!response.ok) {
-      throw new Error(data.detail || 'Document upload failed.');
-    }
+  // Step 2: Ask the backend to process the stored document with Gemini.
+  const processedData = await api.processDocument(
+    uploadData.document_id,
+  );
 
-    return data;
-  };
+  // Return Gemini's structured extraction result.
+  return processedData;
+};
   const handleTakeDocumentPhoto = async () => {
     if (isPickingDocument) {
       return;
@@ -1213,11 +1231,17 @@ const DashboardScreen = ({
       }
 
       try {
-        await uploadDocument(response.assets[0]);
+        // Upload and process the captured document before staging it.
+        const processedDocument = await uploadDocument(
+          response.assets[0],
+        );
 
         appendDocumentAssets(response.assets);
 
-        console.log('Document uploaded successfully.');
+        console.log(
+          'Document processed successfully:',
+          processedDocument,
+        );
       } catch (error) {
         console.error('Document upload failed:', error);
 
@@ -1276,14 +1300,20 @@ const DashboardScreen = ({
       }
 
       try {
+        // Upload and process every selected document before staging them.
         for (const asset of response.assets) {
-          await uploadDocument(asset);
+          const processedDocument = await uploadDocument(asset);
+
+          console.log(
+            'Document processed successfully:',
+            processedDocument,
+          );
         }
 
         appendDocumentAssets(response.assets);
 
         console.log(
-          `${response.assets.length} document(s) uploaded successfully.`,
+          `${response.assets.length} document(s) processed successfully.`,
         );
       } catch (error) {
         console.error('Document upload failed:', error);

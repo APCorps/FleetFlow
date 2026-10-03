@@ -156,9 +156,9 @@ async def process_document(document_id: str):
         "extracted_data": extracted_data,
     }
 
-# Temporarily checks which Gemini models are available to the configured API key.
-@router.get("/gemini-models")
-async def list_gemini_models():
+# Temporarily tests whether Gemini 3.8 Flash can process a simple text request.
+@router.get("/gemini-test")
+async def test_gemini():
     api_key = os.getenv("GEMINI_API_KEY")
 
     if not api_key:
@@ -169,18 +169,11 @@ async def list_gemini_models():
 
     client = genai.Client(api_key=api_key)
 
-    models = []
-
-    for model in client.models.list():
-        supported_actions = getattr(
-            model,
-            "supported_actions",
-            [],
-        )
-
-        if "generateContent" in supported_actions:
-            models.append(model.name)
+    response = client.models.generate_content(
+        model="gemini-3.8-flash",
+        contents="Reply with exactly: Gemini test successful",
+    )
 
     return {
-        "models": models,
+        "response": response.text,
     }
