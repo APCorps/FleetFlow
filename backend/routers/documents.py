@@ -155,25 +155,3 @@ async def process_document(document_id: str):
         "document_id": document_id,
         "extracted_data": extracted_data,
     }
-
-# Temporarily tests whether Gemini 3.8 Flash can process a simple text request.
-@router.get("/gemini-test")
-async def test_gemini():
-    api_key = os.getenv("GEMINI_API_KEY")
-
-    if not api_key:
-        raise HTTPException(
-            status_code=500,
-            detail="GEMINI_API_KEY is not configured.",
-        )
-
-    client = genai.Client(api_key=api_key)
-
-    response = client.models.generate_content(
-        model="gemini-3.8-flash",
-        contents="Reply with exactly: Gemini test successful",
-    )
-
-    return {
-        "response": response.text,
-    }
