@@ -3,12 +3,14 @@
 from fastapi import FastAPI
 
 from database import Base, engine
+# Import all FleetFlow API routers, including document uploads.
 from routers import (
     vehicles,
     drivers,
     trips,
     maintenance,
     auth,
+    documents,
 )
 
 # Creates all SQLAlchemy tables if they do not already exist.
@@ -21,7 +23,8 @@ app.include_router(drivers.router)
 app.include_router(trips.router)
 app.include_router(maintenance.router)
 app.include_router(auth.router)
-
+# Register the document upload API.
+app.include_router(documents.router)
 
 @app.get("/")
 def root():

@@ -9,3 +9,4 @@ python-dotenv
 python-jose
 bcrypt
 pydantic
+python-multipart

@@ -1152,7 +1152,7 @@ const DashboardScreen = ({
     const options: CameraOptions = {
       mediaType: 'photo',
       cameraType: 'back',
-      quality: 0.85,
+      quality: 1,
       saveToPhotos: false,
     };
 
@@ -1206,7 +1206,7 @@ const DashboardScreen = ({
     const options: ImageLibraryOptions = {
       mediaType: 'photo',
       selectionLimit: 10,
-      quality: 0.85,
+      quality: 1,
     };
 
     try {
@@ -1843,7 +1843,7 @@ const DashboardScreen = ({
           />
 
           <ProgressMetricRow
-            icon="route"
+            icon="map-marker-path"
             title="Trip activity"
             value={tripActivity}
             color={FLEET_COLORS.trips}
@@ -2772,7 +2772,14 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  // Define the ScrollView content styles expected by the dashboard layout.
+  screenContent: {
+    paddingTop: 16,
+  },
 
+  screenContentTablet: {
+    paddingTop: 24,
+  },
   /*
    * BACKGROUND
    */
