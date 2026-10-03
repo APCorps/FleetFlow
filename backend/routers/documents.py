@@ -5,6 +5,8 @@ from fastapi import APIRouter, File, UploadFile, HTTPException
 # Gemini client and environment configuration for document extraction.
 import os
 from google import genai
+# Generates unique IDs for uploaded documents.
+from uuid import uuid4
 
 router = APIRouter(
     prefix="/documents",
@@ -15,6 +17,7 @@ UPLOAD_DIR = Path("uploads/documents")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 
+# Uploads a document using a unique ID so files never overwrite each other.
 @router.post("/upload")
 async def upload_document(file: UploadFile = File(...)):
     allowed_types = {
@@ -30,13 +33,15 @@ async def upload_document(file: UploadFile = File(...)):
             detail="Unsupported file type.",
         )
 
+    # Generate a unique ID for this document.
+    document_id = str(uuid4())
+
     file_extension = Path(file.filename or "").suffix.lower()
 
     if not file_extension:
         file_extension = ".jpg"
 
-    safe_filename = f"{Path(file.filename or 'document').stem}{file_extension}"
-
+    safe_filename = f"{document_id}{file_extension}"
     file_path = UPLOAD_DIR / safe_filename
 
     file_content = await file.read()
@@ -44,13 +49,14 @@ async def upload_document(file: UploadFile = File(...)):
 
     return {
         "message": "Document uploaded successfully.",
+        "document_id": document_id,
         "filename": safe_filename,
         "path": str(file_path),
     }
 
-# Sends the uploaded document to Gemini and returns structured extracted information.
+# Processes a previously uploaded document using its document ID.
 @router.post("/process")
-async def process_document(file: UploadFile = File(...)):
+async def process_document(document_id: str):
     api_key = os.getenv("GEMINI_API_KEY")
 
     if not api_key:
@@ -59,11 +65,35 @@ async def process_document(file: UploadFile = File(...)):
             detail="GEMINI_API_KEY is not configured.",
         )
 
+    # Find the uploaded document using its unique ID.
+    matching_files = list(UPLOAD_DIR.glob(f"{document_id}.*"))
+
+    if not matching_files:
+        raise HTTPException(
+            status_code=404,
+            detail="Document not found.",
+        )
+
+    file_path = matching_files[0]
+    file_content = file_path.read_bytes()
+
+    # Determine the MIME type from the file extension.
+    mime_types = {
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".png": "image/png",
+        ".webp": "image/webp",
+        ".pdf": "application/pdf",
+    }
+
+    mime_type = mime_types.get(
+        file_path.suffix.lower(),
+        "application/octet-stream",
+    )
+
     client = genai.Client(api_key=api_key)
 
-    file_content = await file.read()
-
-    # Tell Gemini to identify the document type first, then extract only relevant fields.
+    # Tell Gemini to identify the document type and extract relevant fields.
     prompt = """
     Analyze the uploaded fleet-related document.
 
@@ -74,8 +104,8 @@ async def process_document(file: UploadFile = File(...)):
     Return ONLY valid JSON using this structure:
 
     {
-    "document_type": "",
-    "fields": {}
+      "document_type": "",
+      "fields": {}
     }
 
     Use these document types when applicable:
@@ -90,53 +120,6 @@ async def process_document(file: UploadFile = File(...)):
     - permit
     - other
 
-    Examples:
-
-    For vehicle insurance:
-    {
-    "document_type": "vehicle_insurance",
-    "fields": {
-        "registration_number": "",
-        "policy_number": "",
-        "insurer": "",
-        "policy_start": "",
-        "policy_expiry": ""
-    }
-    }
-
-    For driving licence:
-    {
-    "document_type": "driving_licence",
-    "fields": {
-        "name": "",
-        "licence_number": "",
-        "transport_valid_until": "",
-        "non_transport_valid_until": ""
-    }
-    }
-
-    For Aadhaar:
-    {
-    "document_type": "aadhaar_card",
-    "fields": {
-        "name": "",
-        "aadhaar_number": ""
-    }
-    }
-
-    For maintenance invoice:
-    {
-    "document_type": "maintenance_invoice",
-    "fields": {
-        "invoice_number": "",
-        "invoice_date": "",
-        "vehicle_registration_number": "",
-        "vendor": "",
-        "description": "",
-        "amount": ""
-    }
-    }
-
     Rules:
     1. Do not put unrelated fields in the response.
     2. Do not put extracted information inside a generic description field.
@@ -146,14 +129,14 @@ async def process_document(file: UploadFile = File(...)):
     6. Return JSON only.
     """
 
-    # Request structured JSON directly from Gemini instead of Markdown-wrapped JSON.
+    # Request structured JSON directly from Gemini.
     response = client.models.generate_content(
         model="gemini-3.8-flash",
         contents=[
             prompt,
             {
                 "inline_data": {
-                    "mime_type": file.content_type or "image/jpeg",
+                    "mime_type": mime_type,
                     "data": file_content,
                 }
             },
@@ -162,10 +145,12 @@ async def process_document(file: UploadFile = File(...)):
             "response_mime_type": "application/json",
         },
     )
-    # Convert Gemini's JSON response text into structured data for the frontend.
+
+    # Convert Gemini's JSON response into a Python dictionary.
     extracted_data = json.loads(response.text)
 
     return {
         "message": "Document processed successfully.",
+        "document_id": document_id,
         "extracted_data": extracted_data,
     }
