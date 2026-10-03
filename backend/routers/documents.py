@@ -131,7 +131,8 @@ async def process_document(document_id: str):
 
     # Request structured JSON directly from Gemini.
     response = client.models.generate_content(
-        model="gemini-3.8-flash",
+        # Use Gemini 3.7 Flash for document extraction.
+        model="gemini-3.7-flash",       
         contents=[
             prompt,
             {
