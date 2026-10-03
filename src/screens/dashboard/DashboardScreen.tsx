@@ -1141,6 +1141,36 @@ const DashboardScreen = ({
     });
   };
 
+  // Uploads a captured document image to the FleetFlow backend.
+  const uploadDocument = async (asset: Asset) => {
+    if (!asset.uri) {
+      throw new Error('Captured document has no URI.');
+    }
+
+    const formData = new FormData();
+
+    formData.append('file', {
+      uri: asset.uri,
+      type: asset.type || 'image/jpeg',
+      name: asset.fileName || `document-${Date.now()}.jpg`,
+    } as any);
+
+    const response = await fetch(
+      'https://fleetflowapi.onrender.com/documents/upload',
+      {
+        method: 'POST',
+        body: formData,
+      },
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.detail || 'Document upload failed.');
+    }
+
+    return data;
+  };
   const handleTakeDocumentPhoto = async () => {
     if (isPickingDocument) {
       return;
@@ -1176,12 +1206,27 @@ const DashboardScreen = ({
         return;
       }
 
+      // Upload the captured document to the FleetFlow backend, then keep it staged in the UI.
       if (!response.assets?.length) {
         setDocumentError('No document photo was captured.');
         return;
       }
 
-      appendDocumentAssets(response.assets);
+      try {
+        await uploadDocument(response.assets[0]);
+
+        appendDocumentAssets(response.assets);
+
+        console.log('Document uploaded successfully.');
+      } catch (error) {
+        console.error('Document upload failed:', error);
+
+        setDocumentError(
+          error instanceof Error
+            ? error.message
+            : 'Document upload failed.',
+        );
+      }
     } catch (error) {
       console.error(
         'Document camera failed:',
@@ -1211,7 +1256,7 @@ const DashboardScreen = ({
 
     try {
       const response = await launchImageLibrary(options);
-
+      
       if (response.didCancel) {
         return;
       }
@@ -1224,12 +1269,31 @@ const DashboardScreen = ({
         return;
       }
 
+      // Upload each selected document to the FleetFlow backend, then keep the files staged in the UI.
       if (!response.assets?.length) {
         setDocumentError('No document was selected.');
         return;
       }
 
-      appendDocumentAssets(response.assets);
+      try {
+        for (const asset of response.assets) {
+          await uploadDocument(asset);
+        }
+
+        appendDocumentAssets(response.assets);
+
+        console.log(
+          `${response.assets.length} document(s) uploaded successfully.`,
+        );
+      } catch (error) {
+        console.error('Document upload failed:', error);
+
+        setDocumentError(
+          error instanceof Error
+            ? error.message
+            : 'Document upload failed.',
+        );
+      }
     } catch (error) {
       console.error(
         'Document gallery failed:',

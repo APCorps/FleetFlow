@@ -2,6 +2,9 @@
 from pathlib import Path
 
 from fastapi import APIRouter, File, UploadFile, HTTPException
+# Gemini client and environment configuration for document extraction.
+import os
+from google import genai
 
 router = APIRouter(
     prefix="/documents",
@@ -43,4 +46,60 @@ async def upload_document(file: UploadFile = File(...)):
         "message": "Document uploaded successfully.",
         "filename": safe_filename,
         "path": str(file_path),
+    }
+
+# Sends the uploaded document to Gemini and returns structured extracted information.
+@router.post("/process")
+async def process_document(file: UploadFile = File(...)):
+    api_key = os.getenv("GEMINI_API_KEY")
+
+    if not api_key:
+        raise HTTPException(
+            status_code=500,
+            detail="GEMINI_API_KEY is not configured.",
+        )
+
+    client = genai.Client(api_key=api_key)
+
+    file_content = await file.read()
+
+    prompt = """
+    Analyze this fleet document.
+
+    Identify the document type and extract the important information.
+
+    Return ONLY valid JSON with this structure:
+
+    {
+      "document_type": "",
+      "registration_number": "",
+      "policy_number": "",
+      "insurer": "",
+      "policy_start": "",
+      "policy_expiry": "",
+      "invoice_number": "",
+      "invoice_date": "",
+      "amount": "",
+      "description": ""
+    }
+
+    If a field is not present, return an empty string.
+    """
+
+    response = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=[
+            prompt,
+            {
+                "inline_data": {
+                    "mime_type": file.content_type or "image/jpeg",
+                    "data": file_content,
+                }
+            },
+        ],
+    )
+
+    return {
+        "message": "Document processed successfully.",
+        "extracted_data": response.text,
     }

@@ -10,3 +10,4 @@ python-jose
 bcrypt
 pydantic
 python-multipart
+google-genai
