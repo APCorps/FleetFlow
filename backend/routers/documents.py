@@ -155,3 +155,32 @@ async def process_document(document_id: str):
         "document_id": document_id,
         "extracted_data": extracted_data,
     }
+
+# Temporarily checks which Gemini models are available to the configured API key.
+@router.get("/gemini-models")
+async def list_gemini_models():
+    api_key = os.getenv("GEMINI_API_KEY")
+
+    if not api_key:
+        raise HTTPException(
+            status_code=500,
+            detail="GEMINI_API_KEY is not configured.",
+        )
+
+    client = genai.Client(api_key=api_key)
+
+    models = []
+
+    for model in client.models.list():
+        supported_actions = getattr(
+            model,
+            "supported_actions",
+            [],
+        )
+
+        if "generateContent" in supported_actions:
+            models.append(model.name)
+
+    return {
+        "models": models,
+    }
