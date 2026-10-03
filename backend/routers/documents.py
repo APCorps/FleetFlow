@@ -1,6 +1,6 @@
 # Provides an API endpoint for uploading fleet documents from the mobile app.
 from pathlib import Path
-
+import json
 from fastapi import APIRouter, File, UploadFile, HTTPException
 # Gemini client and environment configuration for document extraction.
 import os
@@ -102,7 +102,10 @@ async def process_document(file: UploadFile = File(...)):
             "response_mime_type": "application/json",
         },
     )
+    # Convert Gemini's JSON response text into structured data for the frontend.
+    extracted_data = json.loads(response.text)
+
     return {
         "message": "Document processed successfully.",
-        "extracted_data": response.text,
+        "extracted_data": extracted_data,
     }
